@@ -24,7 +24,19 @@ int fd_set_nonblock_cloexec(int fd) {
     return 0;
 }
 
-int listener_open(const struct cfg_frontend *fe, char *err, size_t errlen) {
+enum listener_model listener_default_model(void) {
+#if defined(__linux__) && defined(SO_REUSEPORT)
+    return LISTENER_PER_WORKER;
+#else
+    return LISTENER_SHARED;
+#endif
+}
+
+const char *listener_model_name(enum listener_model model) {
+    return model == LISTENER_PER_WORKER ? "per_worker_reuseport" : "shared_inherited";
+}
+
+int listener_open(const struct cfg_frontend *fe, bool reuseport, char *err, size_t errlen) {
     const struct cfg_addr *a = &fe->listen;
     int fd = socket(a->ss.ss_family, SOCK_STREAM, 0);
     if (fd < 0) {
@@ -41,7 +53,12 @@ int listener_open(const struct cfg_frontend *fe, char *err, size_t errlen) {
         step = "SO_REUSEADDR";
     }
 #ifdef SO_REUSEPORT
-    else if (setsockopt(fd, SOL_SOCKET, SO_REUSEPORT, &one, sizeof(one)) < 0) {
+    else if (reuseport && setsockopt(fd, SOL_SOCKET, SO_REUSEPORT, &one, sizeof(one)) < 0) {
+        step = "SO_REUSEPORT";
+    }
+#else
+    else if (reuseport) {
+        errno = ENOPROTOOPT;
         step = "SO_REUSEPORT";
     }
 #endif

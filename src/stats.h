@@ -37,8 +37,9 @@ struct stats_master_info {
     uint64_t generation;
     uint32_t workers_configured;
     bool reload_in_progress;
-    const char *reload_state; /* "idle", "preparing", "committing" */
-    const char *recovery;     /* "none", "pending", "complete", "exhausted" */
+    const char *reload_state;   /* "idle", "preparing", "committing" */
+    const char *listener_model; /* "per_worker_reuseport" o "shared_inherited" */
+    const char *recovery;       /* "none", "pending", "complete", "exhausted" */
     uint64_t recovery_generation;
     uint32_t workers_ready; /* slots en estado ready */
     bool draining;

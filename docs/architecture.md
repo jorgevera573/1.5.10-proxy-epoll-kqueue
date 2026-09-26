@@ -175,8 +175,11 @@ llamador: hay que llamar a `io_loop_del` **antes** de `close(fd)`.
 
 Forma canónica compartida por parser y router: minúsculas, sin punto final,
 etiquetas de 1..63 bytes (`[a-z0-9-_]`, sin `-` inicial ni final), total
-≤ 253; IPv6 entre corchetes validado con `inet_pton` y reescrito con
-`inet_ntop` (`[0:0::1]` → `[::1]`), sin zone id; puerto opcional 1..65535
+≤ 253; IPv6 entre corchetes: primero una política propia de caracteres
+(solo hexadecimales, `:` y `.` para IPv4 embebida; se rechaza cualquier
+identificador de zona `%…`/`%25…` sin depender de `inet_pton`, que en macOS
+los acepta), después `inet_pton` y reescritura con `inet_ntop`
+(`[0:0::1]` → `[::1]`); puerto opcional 1..65535
 separado del nombre. Se rechazan `%`-escapes, userinfo y `*`.
 
 ### 4.4 `http_parser`
@@ -668,7 +671,9 @@ usando esta contabilidad (vía el socket de estadísticas), no solo Valgrind.
   de integración); **ThreadSanitizer**; lint.
 - `proxy-testhooks`: variante de pruebas (ganchos como el retardo de
   recarga); solo la usan las pruebas de integración.
-- CI preparada y **no ejecutada** en remoto.
+- CI remota: GitHub Actions ejecutado una vez (ejecución 36250381456; macOS
+  con fallos, corregidos después y pendientes de una nueva ejecución); ver
+  `docs/verification.md`.
 
 ## 13. Limitaciones conocidas
 
@@ -676,9 +681,21 @@ usando esta contabilidad (vía el socket de estadísticas), no solo Valgrind.
   `max_conns`, cursores de balanceo, `least_conn` y salud son de cada worker
   (§14.2). Con N workers un backend puede recibir hasta N × `max_conns`
   conexiones y N veces las sondas.
-- El reparto de conexiones entre workers lo decide el núcleo
-  (`SO_REUSEPORT`, hash de la conexión): no es necesariamente uniforme y una
-  conexión keep-alive se queda en su worker.
+- El reparto de conexiones entre workers lo decide el núcleo: por hash con
+  `SO_REUSEPORT` en Linux; en el modelo compartido (macOS), según quién
+  acepta antes (con despertar de todos los workers en cada conexión). En
+  ninguno es necesariamente uniforme y una conexión keep-alive se queda en
+  su worker.
+- En el modelo compartido, un worker en su `max_connections` sigue
+  aceptando y cerrando al instante, y compite con los demás por la cola
+  común: puede rechazar una conexión que otro worker habría atendido.
+- Carrera en un arranque fallido (modelo por worker): si el SIGTERM del
+  maestro llega a un worker con la disposición por defecto (antes de
+  instalar sus manejadores o después de restaurarlos en su liberación
+  final), el worker muere por la señal sin terminar de liberar. Valgrind lo
+  muestra como memoria viva, sin errores de acceso (diagnóstico en
+  `docs/verification.md`). No afecta al resultado (código 1, sin hijos);
+  pendiente.
 - Solo son recargables pools, rutas, límites, timeouts, confianza y los
   parámetros de supervisión; workers, max_connections, frontends, `[log]` y
   `[stats]` requieren reiniciar.
@@ -704,7 +721,8 @@ usando esta contabilidad (vía el socket de estadísticas), no solo Valgrind.
 - Sin TLS, HTTP/2 ni WebSocket (rechazados explícitamente).
 - 1xx informativas del upstream descartadas.
 - Direcciones solo como IP literal.
-- macOS/kqueue sin compilar ni ejecutar; CI sin ejecución remota.
+- macOS/kqueue: una ejecución en GitHub Actions con fallos, corregidos en
+  Linux; macOS no verificado hasta una nueva ejecución satisfactoria.
 - Valgrind y ASan no ven la arena `mmap` de `buffer_pool`; su uso se
   comprueba con la contabilidad propia de slots.
 - La prueba de EMFILE se omite bajo Valgrind.
@@ -716,15 +734,18 @@ usando esta contabilidad (vía el socket de estadísticas), no solo Valgrind.
 
 1. `main` lee el fichero **una vez** (`config_read_text`, máx. 4 MiB), lo
    analiza y valida. Con `-t` termina ahí.
-2. El maestro instala sus señales (self-pipe), abre el socket de
-   estadísticas (§14.6) y, para cada worker, crea un `socketpair` y hace
+2. El maestro instala sus señales (self-pipe), elige el **modelo de
+   escucha** (abajo) y, en el compartido, abre un socket por frontend; abre
+   el socket de estadísticas (§14.6) y, para cada worker, crea un
+   `socketpair` y hace
    `fork` **con todas las señales bloqueadas** (un manejador del maestro no
    puede ejecutarse en el hijo antes de restaurar los suyos).
 3. En el hijo: señales por defecto, `release_in_child` cierra y libera todo
    lo del maestro (canales de los otros workers, socket y clientes de
    estadísticas, self-pipe, descriptor de epoll/kqueue, sin tocar sus
    registros), `setpgid(0,0)`, y `worker_run`, que abre **sus** listeners con
-   `SO_REUSEPORT`, crea sus hilos (log, health) y envía `READY`. El hijo
+   `SO_REUSEPORT` (modelo por worker) o adopta las copias heredadas (modelo
+   compartido), crea sus hilos (log, health) y envía `READY`. El hijo
    termina con `_exit` (no ejecuta `atexit` ni vacía stdio heredado).
 4. El maestro espera `READY` de todos en `ipc_timeout_ms`. Si alguno termina
    o no llega a tiempo (se le manda SIGKILL), es un **arranque fallido**: se
@@ -733,7 +754,25 @@ usando esta contabilidad (vía el socket de estadísticas), no solo Valgrind.
 
 Descriptores: todos los del maestro se abren con `O_CLOEXEC` y el hijo cierra
 explícitamente los que heredó y no son suyos (solo conserva su extremo del
-socketpair y stdio).
+socketpair, stdio y, en el modelo compartido, los listeners).
+
+**Modelo de escucha** (`listener_model` en el JSON y en el log del
+maestro):
+
+| Modelo | Plataforma | Cómo | Reparto |
+|---|---|---|---|
+| `per_worker_reuseport` | Linux | cada worker abre su socket con `SO_REUSEPORT` | el núcleo reparte las conexiones nuevas por hash de la conexión |
+| `shared_inherited` | resto (macOS) | el maestro abre un socket por frontend **antes** del `fork` (sin `SO_REUSEPORT`); cada worker hereda una copia y todos aceptan de la misma cola | acepta el worker que despierta y llama antes a `accept`; los demás reciben `EAGAIN` |
+
+En macOS `SO_REUSEPORT` permite compartir el puerto pero **no reparte**:
+todas las conexiones van a un solo socket, así que con sockets por worker
+solo un worker atendía tráfico (observado en GitHub Actions, ejecución
+36250381456). En el modelo compartido: un puerto ocupado hace fallar el
+arranque en el maestro, antes de crear workers; el maestro conserva sus
+copias para las reposiciones y las cierra al empezar el cierre, de modo que
+el puerto deja de aceptar cuando los workers cierran las suyas. En
+`proxy-testhooks`, `PROXY_TEST_SHARED_LISTENERS` fuerza el modelo compartido
+para probarlo también en Linux.
 
 ### 14.2 Alcance del estado: por worker
 

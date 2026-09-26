@@ -25,10 +25,10 @@ hecho benchmarks.
 
 | ID | Requisito | Estado | Evidencia | Falta |
 |----|-----------|--------|-----------|-------|
-| R01 | Build Meson y selección epoll/kqueue | **Parcial** | Linux: GCC, Clang, release, ASan/UBSan, TSan y cmocka del wrap, 0 avisos con `-Werror`; `auto` → epoll. Pasos de CI simulados en local con herramientas fijadas. | Compilar y probar en macOS. `io_event_kqueue.c` nunca se ha compilado. |
-| R02 | API común `io_loop_*` | **Parcial** | 18 pruebas de `io_event` (epoll); el proxy y el hilo de health usan la API. | Ejecución con kqueue en macOS. |
-| R03 | Sockets no bloqueantes y edge-triggered | **Parcial** | Fragmentación byte a byte, cliente lento de 40 MB con memoria acotada, escrituras parciales, desconexiones; mutación de pérdida de progreso detectada (etapa 3). | macOS/kqueue. |
-| R04 | Frontends con `SO_REUSEPORT` y workers configurables | **Verificado (Linux)** | `workers` 1..64 y `0` = uno por CPU (probado: 18 workers en esta máquina). Cada worker abre su listener por frontend con `SO_REUSEPORT`; más de un worker atiende tráfico (observado por estadísticas, sin suponer reparto uniforme); routing correcto en los dos frontends con 2 workers; puerto ocupado → arranque fallido con código 1 y sin hijos. | macOS. |
+| R01 | Build Meson y selección epoll/kqueue | **Parcial** | Linux: GCC, Clang, release, ASan/UBSan, TSan y cmocka del wrap, 0 avisos con `-Werror`; `auto` → epoll. Pasos de CI simulados en local con herramientas fijadas. **macOS (GitHub Actions, ejecución 36250381456, commit 1e45556a)**: compila con Clang y kqueue; 14/18 suites, 7 pruebas fallidas en 4 suites (causas y correcciones en § Portabilidad macOS). | Nueva ejecución en macOS con las correcciones (no ejecutada). |
+| R02 | API común `io_loop_*` | **Parcial** | 18 pruebas de `io_event` (epoll); el proxy y el hilo de health usan la API. kqueue en macOS (ejecución 36250381456): 17/18; la fallida era un supuesto de la prueba (eventos de dos fds mezclados), corregida y con mutación del filtrado detectada en Linux. | Nueva ejecución en macOS con kqueue (no ejecutada). |
+| R03 | Sockets no bloqueantes y edge-triggered | **Parcial** | Fragmentación byte a byte, cliente lento de 40 MB con memoria acotada, escrituras parciales, desconexiones; mutación de pérdida de progreso detectada (etapa 3). En macOS (ejecución 36250381456) la suite de integración de un worker pasó salvo el timeout de conexión (supuesto de la prueba, corregido). | Nueva ejecución en macOS (no ejecutada). |
+| R04 | Frontends con `SO_REUSEPORT` y workers configurables | **Verificado (Linux)** | `workers` 1..64 y `0` = uno por CPU (probado: 18 workers en esta máquina). Cada worker abre su listener por frontend con `SO_REUSEPORT`; más de un worker atiende tráfico (observado por estadísticas, sin suponer reparto uniforme); routing correcto en los dos frontends con 2 workers; puerto ocupado → arranque fallido con código 1 y sin hijos. **Modelo de escucha por plataforma**: en macOS `SO_REUSEPORT` no reparte (ejecución 36250381456: un solo worker atendía); allí el maestro comparte un socket por frontend heredado por los workers. Ese modelo se prueba en Linux forzándolo con un gancho de `proxy-testhooks` (servicio dirigido a cada worker, límite por worker y arranque fallido, deterministas con SIGSTOP de workers propios). | macOS: nueva ejecución con el modelo compartido (no ejecutada). |
 | R05 | Host y cabeceras de reenvío | **Verificado (Linux)** | El backend verifica Host y la política de X-Forwarded-For, X-Real-IP y X-Forwarded-Proto (confiable y no confiable). | — |
 | R06 | Exacto → wildcard → default → 502 | **Verificado (Linux)** | Unitarias de `router` e integración (incluido 502 sin default). | — |
 | R07 | round_robin, weighted, least_conn | **Verificado (Linux)** | Unitarias deterministas: secuencias exactas (RR; weighted 3:1 = A A B A, 5:1:1 = a a b a c a a; 300/100 en 400), least_conn con conexiones retenidas y empates rotatorios, exclusión por salud y `max_conns`, y contabilidad entre generaciones. Integración (1 worker): weighted 30/10; least_conn con retenidas; contadores liberados al cancelar (RST) y en cierre forzado; conservación tras recarga. **Multiproceso**: weighted 3:1 cumplido dentro de cada worker (±1); least_conn equilibrado dentro de cada worker (diferencia ≤ 1); `max_conns = 1` con 2 workers → el backend llega a 2 simultáneas y cada worker respeta la suya (alcance **por worker**, documentado). | Estado compartido entre workers (descartado en esta etapa; §14.2). |
@@ -83,7 +83,7 @@ inválida y cambio de puerto rechazados sin interrupción; cierre con
 | `stats` | 2 | **etapa 5**: sumas por worker, ausentes y `complete`, agregación por (pool, dirección), salud mixta y resumen, tipos de contador, escapado JSON; `workers_ready`/`degraded`, `reload_state` y `recovery` |
 | `health` | 5 | nueva: TCP correcta y rechazada (`ECONNREFUSED`), estado HTTP 204 sano / 503 caído, timeout (vence el plazo, no la respuesta), sonda en curso de un plan retirado informa con su generación (7) y no hay más, parada con sondas en curso |
 
-### Integración: 87 casos en 7 ficheros
+### Integración: 95 casos en 7 ficheros
 
 Backends Python propios (`/health`, `/_set`, `/_state`, `/hold`,
 `/release`, `X-Backend` en toda respuesta). Puertos libres, directorio
@@ -102,7 +102,7 @@ maestro registró en su log y que siguen siendo el ejecutable de la prueba.
 | `test_reload.py` | 7 | cambio de destino; transferencia larga + keep-alive; inválida; no recargables; SIGHUP agrupados + varias recargas + cierre limpio; cierre durante recarga; sonda tardía de la generación vieja |
 | `test_limits.py` | 1 | EMFILE con `RLIMIT_NOFILE = 40` solo en el proxy de la prueba (omitida bajo Valgrind) |
 | `test_generations.py` | 9 | corrección: max_conns = 1 ocupado tras recargar (503 hasta liberar); least_conn ve la retenida de la generación 1; reducir max_conns 3 → 1 con 3 activas (ninguna cortada, 503 con 2 y con 1 activas, 200 al bajar a 0); eliminar y reintroducir con petición activa; cancelación (RST) tras recargar descuenta en la generación 1; cierre forzado con retenidas de 3 generaciones; recarga retrasada 3 s sin bloquear; cierre durante recarga lenta con el bucle respondiendo; el binario `proxy` no contiene los ganchos de prueba (retardo de recarga y retención de la activación) y los ignora |
-| `test_multiprocess.py` | 24 | **etapa 5**: worker matado durante la **activación** (determinista, ver abajo); **retirada**: plazo de confirmación vencido, `COMMIT_FAILED`, worker que no procesa SIGTERM (SIGKILL), `max_restarts` agotado tras activación parcial (estado degradado; salida 1 con un solo puesto), cierre del maestro durante una retirada; 3 workers (pids distintos, 0600, más de un worker sirve, totales = suma, cierre limpio); `workers = 0` → uno por CPU; routing en 2 frontends con 2 workers; puerto ocupado → código 1 sin hijos; `max_conns` por worker; weighted y least_conn por worker; recarga válida/inválida/no recargable coordinada; transferencia en curso durante la recarga; worker matado durante preparación lenta → rechazo y la siguiente se aplica; `kill -9` → reposición contada; límite de reinicios → maestro sale con 1; fichero y socket ajenos intactos; clientes lentos, cliente sobrante y expulsión con tráfico en marcha; log saturado; log de acceso sin secretos |
+| `test_multiprocess.py` | 32 | **etapa 5**: `SharedStartupTest`/`SharedScopeTest` (7) y `SharedSupervisionTest` (1: reposición con nuevo pid, generación vigente, socket heredado y tráfico servido por el sustituto) con el modelo de escucha compartido forzado; worker matado durante la **activación** (determinista, ver abajo); **retirada**: plazo de confirmación vencido, `COMMIT_FAILED`, worker que no procesa SIGTERM (SIGKILL), `max_restarts` agotado tras activación parcial (estado degradado; salida 1 con un solo puesto), cierre del maestro durante una retirada; 3 workers (pids distintos, 0600, más de un worker sirve, totales = suma, cierre limpio); `workers = 0` → uno por CPU; routing en 2 frontends con 2 workers; puerto ocupado → código 1 sin hijos; `max_conns` por worker; weighted y least_conn por worker; recarga válida/inválida/no recargable coordinada; transferencia en curso durante la recarga; worker matado durante preparación lenta → rechazo y la siguiente se aplica; `kill -9` → reposición contada; límite de reinicios → maestro sale con 1; fichero y socket ajenos intactos; clientes lentos, cliente sobrante y expulsión con tráfico en marcha; log saturado; log de acceso sin secretos |
 
 ### Mutaciones (riesgo concreto de esta etapa)
 
@@ -193,6 +193,104 @@ integración 15/15, unitarias 24/24.
   clang-format 21.1.8, clang-tidy 21.1.8 (sistema) y 21.1.6 (PyPI),
   Python 3.14.4, curl 8.18.0.
 - Fecha: 2026-09-25.
+
+### Portabilidad macOS (GitHub Actions, ejecución 36250381456)
+
+Ejecución real del workflow en el commit `1e45556a`: `build-test (macos-15,
+clang)` con 14/18 suites y 7 pruebas fallidas en 4 suites (los jobs de
+Ubuntu pasaron; `lint` falló en la instalación de paquetes). Causas
+confirmadas con el log de la ejecución y el código, y correcciones:
+
+| Fallo en macOS | Causa confirmada | Corrección |
+|---|---|---|
+| `test_host_rejections`: `[fe80::1%25eth0]` aceptado | `host.c` delegaba la validación en `inet_pton`, y el de macOS acepta el identificador de zona | Política explícita de caracteres antes de `inet_pton` (hexadecimales, `:`, `.`); más casos (`%eth0`, `%1`, con puerto, espacio, `/64`) y uno válido con IPv4 embebida. En Linux la prueba ya pasaba antes (glibc rechaza la zona): la eficacia en macOS solo se confirmará allí. |
+| `test_mod_in_callback_masks_batch_events`: `second_events & IO_WRITE` | Supuesto de la prueba: acumulaba en `second_events` cualquier callback posterior. Con kqueue lectura y escritura del mismo fd son entradas separadas (§3.1), así que el `IO_WRITE` legítimo del fd **original** se atribuía al modificado. El despacho es correcto: filtra cada entrada por el interés actual. | La prueba separa eventos del fd modificado y del original; exige lectura y ninguna escritura en el modificado. Mutación (sin el filtro por interés en el despacho): la prueba falla en Linux. |
+| `test_worker_that_cannot_handle_sigterm…` y `test_master_shutdown_during_retirement`: `pid_is` falso | `pid_is()` leía `/proc/<pid>/cmdline`, que no existe en macOS | `process_info()` en el arnés con `ps -o ppid= -o command= -p PID` (Linux y macOS); la prueba exige además que el pid sea **hijo de ese maestro**. La limpieza de `Proxy.stop()` usaba también `/proc` (en macOS no habría limpiado): usa la misma función. |
+| `test_three_workers_serve_and_stop_cleanly` (un solo worker en 300 conexiones) y `test_max_conns_is_per_worker` (1 retenida, no 2) | **Defecto de implementación en macOS**: `SO_REUSEPORT` no reparte en macOS; con un socket por worker solo uno aceptaba | Modelo de escucha compartido fuera de Linux (§14.1 de la arquitectura), visible en el JSON (`listener_model`). Pruebas deterministas en ese modelo: con los demás workers de la prueba detenidos (SIGSTOP, verificados como hijos del maestro y reanudados/limpiados siempre), cada worker atiende exactamente la conexión que se le dirige; para el límite, una espera por worker y la tercera recibe 503. En Linux (`SO_REUSEPORT`) se mantiene la observación por estadísticas, sin más reintentos. `SharedStartupTest` y `SharedScopeTest` repiten las suites con el modelo compartido forzado en Linux. |
+| `test_upstream_connect_timeout_is_504`: 504 pero `failures = 0` | Supuesto de la prueba: 4 conexiones llenaban la cola de un `listen(0)` en Linux, no en macOS; el handshake se completaba y vencía el plazo de **respuesta** (también 504, sin contar fallo) | La cola se llena por observación hasta que un handshake queda pendiente (en Linux basta 1 conexión) y la prueba comprueba que sigue bloqueada antes y después; el fallo de conexión debe contar exactamente 1 y el timeout de respuesta 0 (nueva aserción en `test_upstream_response_timeout_is_504`). Mutación (sin `passive_failure` en el timeout de conexión): la prueba falla (`0 != 1`). |
+
+Revisión del parche:
+
+- `procps` (proporciona `ps`) se instala de forma explícita en los jobs
+  Linux de GitLab (`before_script`, también en `dpkg-query`) y de GitHub
+  (`build-test` y `lint`). Si `ps` falta o falla, `process_info()` y
+  `process_state()` del arnés lanzan `PsUnavailable` con el diagnóstico
+  (`no se encuentra ps (… apt-get install procps)`) en vez de tratarlo como
+  "el proceso no existe"; la limpieza de `Proxy.stop()` lo escribe en stderr
+  sin abortar. Comprobado con `PATH` sin `ps`.
+- Tras SIGSTOP, `pause()` espera con plazo a ver cada worker detenido
+  (`ps -o stat=` empieza por `T`, igual en Linux y macOS) antes de dirigir
+  tráfico; `resume()` espera a verlo reanudado. Las pruebas de retirada usan
+  el mismo `pause()`.
+- Prueba nueva `SharedSupervisionTest`: con el modelo compartido forzado,
+  recarga a la generación 2, `kill -9` del worker 1 → sustituto con otro pid,
+  generación 2, `restarts = 1` y el log `escuchando en … (socket compartido
+  heredado del maestro)`; con el worker 0 detenido (observado), las 3
+  peticiones las atiende el sustituto (destino B de la generación 2) y sus
+  estadísticas lo muestran (`accepted = 3`, `selected` de B = 3, de A = 0).
+- Repetición: `SharedStartupTest SharedScopeTest SharedSupervisionTest
+  ActivationFailureTest` 3 veces: Ran 14 OK en las 3.
+
+Resultados en Linux:
+
+```bash
+meson compile -C build                                          # 0 avisos
+./build/tests/test_http_parser; ./build/tests/test_io_event      # 34 y 18 PASSED
+PROXY_BIN=build/src/proxy PROXY_TEST_BIN=build/src/proxy-testhooks \
+  python3 tests/integration/test_multiprocess.py StartupTest ScopeTest SharedStartupTest SharedScopeTest
+#   Ran 14 OK (modelo por worker y compartido forzado)
+python3 tests/integration/test_proxy.py ProxyTest.test_upstream_connect_timeout_is_504 \
+  ProxyTest.test_upstream_response_timeout_is_504                # Ran 2 OK
+meson test -C build                                             # Ok: 18  Fail: 0
+bash scripts/lint.sh format-check && bash scripts/lint.sh tidy build && bash scripts/lint.sh cppcheck
+#   OK; tidy: OK (31 ficheros); OK
+# ASan+UBSan (TIME_SCALE=2): test_http_parser 34, test_io_event 18,
+#   test_multiprocess Startup/Scope/Shared*/Supervision: Ran 16 OK, test_proxy OK
+# Valgrind: test_http_parser y test_io_event: exit 0, 0 errores, 0 bytes,
+#   3 fds heredados. 7 pruebas de listeners (ambos modelos, KEEP_LOGS=1):
+#   Ran 7 OK; 22 procesos con resumen: 20 limpios (0 errores, 0 bytes,
+#   3 fds; incluidos los workers con listeners heredados) y 2 con errores:
+#   workers del arranque fallido por puerto ocupado en el modelo por worker,
+#   muertos por el SIGTERM del maestro durante su liberación final (carrera
+#   anterior a esta corrección, ver pendientes).
+```
+
+TSan no se repitió: los cambios no tocan hilos ni estado compartido entre
+hilos.
+
+Pendiente:
+
+- **macOS no está verificado**: hay que volver a ejecutar el workflow con
+  estas correcciones. Hasta entonces R01–R04 siguen parciales en macOS.
+- `config.c` (`parse_ip`) también valida direcciones de la configuración con
+  `inet_pton`: en macOS aceptaría una zona en `listen`/`address` y la
+  descartaría en silencio. Fuera del alcance de esta corrección.
+- `test_limits` sigue omitida fuera de Linux (`skipUnless /proc`, anterior).
+- Carrera del arranque fallido en el modelo por worker (anterior a esta
+  corrección; diagnóstico abajo): sin corregir.
+
+Diagnóstico de los dos informes de Valgrind con errores (reproducidos en 2
+de 6 ejecuciones de `StartupTest.test_startup_fails_cleanly_on_busy_port`
+con `TIME_SCALE=4`; la prueba pasó las 6 veces):
+
+| | pid 487773 | pid 487830 |
+|---|---|---|
+| Terminación | `default action of signal 15 (SIGTERM)` | `default action of signal 15 (SIGTERM)` |
+| Momento | después de `shutdown final generations_live=0 backends_live=0`: en la liberación final, tras `restore_signals` | sin ninguna línea propia en el log: en el arranque, entre las señales por defecto de `child_main` y la instalación de los manejadores del worker |
+| Errores de acceso (lectura/escritura inválida, valor sin inicializar, liberación incorrecta, parámetro de llamada) | 0 | 0 |
+| `definitely` / `indirectly lost` | 0 / 0 bytes | 0 / 0 bytes |
+| `possibly lost` | 272 B: pila del hilo consumidor del log (`allocate_stack` ← `log_start`), aún sin unir | 272 B: ídem |
+| `still reachable` | 2.107.690 B en 19 bloques: ring del log (2.097.152 B = 4096 × 512, `log.c:240`), tabla de longitudes (8.192 B, `log.c:241`), logger, configuración heredada de `main`, búferes de zona horaria de glibc | 2.140.458 B en 20 bloques: los mismos más el búfer de lotes del hilo consumidor (32.768 B, `consumer_main`) |
+| Descriptores | 3 abiertos (3 heredados) | 3 abiertos (3 heredados) |
+| `ERROR SUMMARY` | 19 = registros de pérdida (con `--errors-for-leak-kinds=all` cada uno cuenta como error) | 20 = ídem |
+
+Conclusión: **no son errores de memoria**, sino limpieza interrumpida. El
+maestro envía SIGTERM a todos los workers al detectar el arranque fallido;
+si llega mientras el worker tiene la disposición por defecto (antes de
+instalar sus manejadores o después de restaurarlos), el proceso muere por la
+señal con objetos vivos. El resultado observable no cambia (código 1, sin
+hijos, socket retirado). Pendiente de corregir (p. ej. bloquear SIGTERM en
+esas dos ventanas); no se trata en esta corrección.
 
 ### Etapa 5: retirada con plazo de workers que no confirman
 
@@ -487,8 +585,8 @@ bash scripts/ci.sh lint <scratch>/ci-lint4                    # format, tidy (24
 
 | Pipeline | Estado |
 |---|---|
-| `.gitlab-ci.yml` (Linux: gcc, clang, sanitizers, valgrind, tsan, lint) | **Preparado, no ejecutado** |
-| `.github/workflows/ci.yml` (Linux y macOS; tsan y valgrind solo Linux) | **Preparado, no ejecutado** |
+| `.github/workflows/ci.yml` (Linux y macOS; tsan y valgrind solo Linux) | **Ejecutado** en remoto: ejecución 36250381456 (commit `1e45556a`). `build-test (ubuntu-24.04, gcc)` y `(ubuntu-24.04, clang)`: correctos; `build-test (macos-15, clang)`: 14/18 suites (§ Portabilidad macOS); `lint`: falló en la instalación de paquetes. Las correcciones posteriores (portabilidad, `procps`, instalación de paquetes) **no se han ejecutado todavía** en remoto. |
+| `.gitlab-ci.yml` (Linux: gcc, clang, sanitizers, valgrind, tsan, lint) | Sin evidencia registrada aquí: el proyecto de GitLab es privado y no se puede consultar desde este entorno. |
 
 ### Etapas anteriores (referencia)
 
@@ -497,9 +595,12 @@ Etapa 1: `--repeat=50` de `io_event` y 6 mutaciones. Etapa 2: 7 mutaciones
 
 ### No verificado
 
-- macOS/kqueue: no compilado ni ejecutado.
-- CI: sin ejecución remota (preparada; incluye las suites nuevas porque
-  delega en `meson test`).
+- macOS/kqueue: compilado y ejecutado una vez en GitHub Actions (ejecución
+  36250381456) con 7 pruebas fallidas; corregidas en Linux y **pendiente**
+  una nueva ejecución en macOS.
+- CI remota: GitHub Actions se ejecutó una vez (36250381456, commit
+  `1e45556a`); los cambios posteriores están sin ejecutar allí. Para GitLab
+  no hay evidencia registrada en este documento.
 - TSan no demuestra ausencia de carreras en caminos no ejercitados ni cubre
   el protocolo entre procesos.
 - Combinaciones de retirada sin prueba dirigida: worker en retirada cuando

@@ -1,9 +1,8 @@
 # GitHub Actions — Linux y macOS.
 #
-# ESTADO: preparado, NO ejecutado. El repositorio remoto actual es GitLab;
-# este workflow solo corre si el proyecto se publica en GitHub. Ningún
-# resultado de macOS se considera verificado hasta disponer de una ejecución
-# real (docs/verification.md).
+# ESTADO: primera ejecución realizada, con fallos pendientes de corregir.
+# macOS pendiente de verificación satisfactoria.
+# Evidencias y alcance en docs/verification.md.
 #
 # Fijaciones: acciones por SHA de commit (con la etiqueta en comentario),
 # runners por etiqueta de versión (no *-latest), herramientas Python por
@@ -40,7 +39,7 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends \
-            gcc clang python3-venv pkg-config valgrind
+            gcc clang libclang-rt-18-dev python3-venv pkg-config procps valgrind
       - name: Herramientas fijadas
         run: bash scripts/ci.sh tools
       - name: Entorno
@@ -73,6 +72,7 @@ jobs:
           path: |
             build/meson-logs/
             build-asan/meson-logs/
+            build-tsan/meson-logs/
 
   lint:
     runs-on: ubuntu-24.04
@@ -82,8 +82,7 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends \
-            gcc clang libclang-rt-18-dev python3-venv pkg-config valgrind
-            clang python3-venv pkg-config cppcheck
+            clang python3-venv pkg-config procps cppcheck
           cppcheck --version
       - name: Herramientas fijadas
         run: bash scripts/ci.sh tools

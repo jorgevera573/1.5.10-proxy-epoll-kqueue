@@ -200,7 +200,18 @@ static void test_host_rejections(void **state) {
     assert_host_bad("[::1", true, HOST_BAD_IPV6);
     assert_host_bad("[zz::1]", true, HOST_BAD_IPV6);
     assert_host_bad("[::1]x", true, HOST_BAD_IPV6);
+    /* Identificadores de zona: rechazados por política propia (no depende de
+     * inet_pton, que en macOS los acepta). */
     assert_host_bad("[fe80::1%25eth0]", true, HOST_BAD_IPV6);
+    assert_host_bad("[fe80::1%eth0]", true, HOST_BAD_IPV6);
+    assert_host_bad("[fe80::1%1]", true, HOST_BAD_IPV6);
+    assert_host_bad("[fe80::1%25eth0]:8080", true, HOST_BAD_IPV6);
+    assert_host_bad("[::1 ]", true, HOST_BAD_IPV6);
+    assert_host_bad("[::1/64]", true, HOST_BAD_IPV6);
+    /* IPv4 embebida sigue siendo válida ('.' está permitido). */
+    struct host_name h4;
+    assert_int_equal(host_normalize("[::ffff:192.0.2.1]", 18, true, &h4), HOST_OK);
+    assert_true(h4.is_ipv6);
 
     char label64[80];
     memset(label64, 'a', 64);

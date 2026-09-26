@@ -61,10 +61,13 @@ activas se multiplican por N (ver `docs/architecture.md` §14).
 | `listen` | cadena | `"IPv4:puerto"` o `"[IPv6]:puerto"`. **Solo IP literal.** Puertos 1..65535; repetidos se rechazan. **No recargable** (ni el número ni el orden de frontends). |
 | `trusted_proxies` | lista de cadenas | IP literales (sin CIDR ni nombres), hasta 64. Solo los pares de esta lista pueden aportar `X-Forwarded-For`, `X-Real-IP` y `X-Forwarded-Proto`. |
 
-Cada worker abre su propio listener por frontend con `SO_REUSEADDR` y
-`SO_REUSEPORT`; el núcleo reparte las conexiones nuevas entre ellos (el
-reparto no es necesariamente uniforme). Si un puerto está ocupado por otro
-proceso sin `SO_REUSEPORT`, el arranque falla limpiamente (código 1).
+En Linux cada worker abre su propio listener por frontend con
+`SO_REUSEADDR` y `SO_REUSEPORT`, y el núcleo reparte las conexiones nuevas
+entre ellos. En macOS (y cualquier plataforma distinta de Linux),
+`SO_REUSEPORT` no reparte: el maestro abre un único socket por frontend
+antes de crear los workers y todos aceptan de él (`docs/architecture.md`
+§14.1). En ningún caso el reparto es necesariamente uniforme. Si un puerto
+está ocupado por otro proceso, el arranque falla limpiamente (código 1).
 
 ## `[[pool]]` (1..256)
 

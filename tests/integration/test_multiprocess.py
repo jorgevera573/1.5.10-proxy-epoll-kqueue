@@ -31,6 +31,7 @@ from harness import (  # noqa: E402
     fetch_stats,
     free_port,
     get,
+    is_stopped,
     scaled,
     wait_until,
 )
@@ -81,14 +82,6 @@ def worker_backend(w, pool, port):
     raise KeyError((pool, port))
 
 
-def pid_is(pid, name):
-    try:
-        with open(f"/proc/{pid}/cmdline", "rb") as f:
-            return name.encode() in f.read()
-    except OSError:
-        return False
-
-
 def pid_alive(pid):
     try:
         os.kill(pid, 0)
@@ -99,6 +92,9 @@ def pid_alive(pid):
 
 class Base(unittest.TestCase):
     ALARM = 120
+    # True: fuerza el modelo de escucha compartido (el de macOS) con el gancho
+    # de proxy-testhooks, para ejercitarlo también en Linux.
+    FORCE_SHARED = False
 
     def setUp(self):
         self.alarm = Alarm(self.ALARM)
@@ -114,9 +110,11 @@ class Base(unittest.TestCase):
     def tearDown(self):
         try:
             # Un worker detenido por la prueba no debe quedar vivo aunque la
-            # prueba falle: SIGKILL solo si sigue siendo este ejecutable.
+            # prueba falle: SIGKILL solo a los pids que la prueba detuvo y que
+            # siguen ejecutando el binario de su proxy.
+            proxy = getattr(self, "proxy", None)
             for pid in self.stopped:
-                if pid_is(pid, "proxy"):
+                if proxy is not None and proxy.runs_our_binary(pid):
                     os.kill(pid, signal.SIGKILL)
             for b in (self.A, self.B):
                 if b.p.poll() is None:
@@ -128,11 +126,53 @@ class Base(unittest.TestCase):
             self.alarm.__exit__(None, None, None)
 
     def start(self, text, **kw):
+        if self.FORCE_SHARED:
+            kw["testhooks"] = True
+            kw["env"] = dict(kw.get("env") or {}, PROXY_TEST_SHARED_LISTENERS="1")
         self.proxy = self.wd.add(Proxy(self.wd.path, text, **kw))
         return self.proxy
 
+    def listener_model(self):
+        return self.proxy.stats()["master"]["listener_model"]
+
+    def pause(self, pids):
+        """SIGSTOP a workers de ESTE maestro (verificado) y registro para la
+        limpieza. Vuelve solo cuando `ps` los muestra detenidos (estado T):
+        hasta entonces no se puede contar con que no acepten."""
+        for pid in pids:
+            self.assertTrue(self.proxy.is_own_worker(pid), pid)
+            self.stopped.append(pid)
+            os.kill(pid, signal.SIGSTOP)
+        for pid in pids:
+            wait_until(lambda pid=pid: is_stopped(pid), 5, f"worker {pid} detenido")
+
+    def resume(self, pids):
+        for pid in pids:
+            os.kill(pid, signal.SIGCONT)
+        for pid in pids:
+            wait_until(lambda pid=pid: not is_stopped(pid), 5, f"worker {pid} reanudado")
+            self.stopped.remove(pid)
+
+    def only(self, keep, pids):
+        """Contexto: todos los workers de `pids` salvo `keep` detenidos.
+        Con el socket compartido, solo `keep` puede aceptar."""
+        test = self
+
+        class _Only:
+            def __enter__(self):
+                self.others = [p for p in pids if p != keep]
+                test.pause(self.others)
+
+            def __exit__(self, *exc):
+                test.resume(self.others)
+                return False
+
+        return _Only()
+
     def all_ready(self, n):
         doc = self.proxy.stats()
+        if self.FORCE_SHARED:  # el gancho está activo de verdad
+            self.assertEqual(doc["master"]["listener_model"], "shared_inherited")
         ws = responded(doc)
         if doc["complete"] and len(ws) == n and all(w["state"] == "ready" for w in ws):
             return doc
@@ -157,17 +197,33 @@ class StartupTest(Base):
         self.assertEqual({w["generation"] for w in doc["workers"]}, {1})
         self.assertEqual(stat.S_IMODE(os.stat(self.proxy.stats_sock).st_mode), 0o600)
 
-        # Peticiones en conexiones nuevas hasta que más de un worker haya
-        # atendido alguna (el núcleo reparte; no se exige uniformidad).
-        served = set()
-        for i in range(300):
-            self.assertEqual(get(self.fe).status, 200)
-            if i % 10 == 9:
-                ws = responded(self.proxy.stats())
-                served = {w["index"] for w in ws if w["counters"]["requests"] > 0}
-                if len(served) > 1:
-                    break
-        self.assertGreater(len(served), 1, "un solo worker atendió 300 conexiones")
+        if doc["master"]["listener_model"] == "shared_inherited":
+            # Socket compartido (macOS, o forzado): con los demás detenidos
+            # solo puede aceptar el elegido. Cada worker atiende exactamente
+            # la conexión que se le dirige.
+            by_index = [w["pid"] for w in sorted(doc["workers"], key=lambda w: w["index"])]
+            before = [w["counters"]["accepted"] for w in doc["workers"]]
+            for pid in by_index:
+                with self.only(pid, by_index):
+                    self.assertEqual(get(self.fe).status, 200)
+            doc = wait_until(lambda: self.all_ready(3), 10, "3 workers reanudados")
+            after = [w["counters"]["accepted"] for w in doc["workers"]]
+            self.assertEqual([a - b for a, b in zip(after, before)], [1, 1, 1])
+        else:
+            # SO_REUSEPORT por worker (Linux): el núcleo reparte por hash de
+            # la conexión; no se puede dirigir a un worker (uno detenido
+            # retendría las suyas en su cola). Se observa por estadísticas,
+            # sin exigir uniformidad.
+            self.assertEqual(doc["master"]["listener_model"], "per_worker_reuseport")
+            served = set()
+            for i in range(300):
+                self.assertEqual(get(self.fe).status, 200)
+                if i % 10 == 9:
+                    ws = responded(self.proxy.stats())
+                    served = {w["index"] for w in ws if w["counters"]["requests"] > 0}
+                    if len(served) > 1:
+                        break
+            self.assertGreater(len(served), 1, "un solo worker atendió 300 conexiones")
         acc = self.proxy.wait_quiescent()
         doc = self.proxy.stats()
         self.assertEqual(acc["requests"], sum(w["counters"]["requests"]
@@ -220,35 +276,60 @@ class ScopeTest(Base):
     def test_max_conns_is_per_worker(self):
         self.start(config(self.fe, {"a": ("round_robin", [(self.A.port, 1, 1)])}, workers=2,
                           extra=""))
-        wait_until(lambda: self.all_ready(2), 10, "2 workers listos")
-        statuses = []
+        doc = wait_until(lambda: self.all_ready(2), 10, "2 workers listos")
 
         def held():
             return backend_state(self.A.port)["held"].get("h", 0)
 
-        # Se abren esperas una a una: cada una o queda retenida en el backend o
-        # recibe 503 del worker que ya tiene su única conexión ocupada.
-        for _ in range(40):
-            before = held()
+        def send_hold():
             c = Conn(self.fe, timeout=scaled(10))
             self.conns.append(c)
             c.send(b"GET /hold?key=h HTTP/1.1\r\nHost: api.test\r\n\r\n")
+            return c
 
-            def outcome():
-                if held() > before:
-                    return "held"
-                r, _, _ = select.select([c.sock], [], [], 0)
-                return "answered" if r else None
+        def answered(c):
+            r, _, _ = select.select([c.sock], [], [], 0)
+            return bool(r)
 
-            res = wait_until(outcome, 10, "retenida o respondida")
-            if res == "answered":
-                statuses.append(c.read_response().status)
-            if held() >= 2:
-                break
+        statuses = []
+        if doc["master"]["listener_model"] == "shared_inherited":
+            # Socket compartido: cada espera se dirige a un worker deteniendo
+            # al otro; con los dos en marcha la tercera recibe 503 acepte
+            # quien acepte, porque ambos están en su límite.
+            p0, p1 = (w["pid"] for w in sorted(doc["workers"], key=lambda w: w["index"]))
+            with self.only(p0, [p0, p1]):
+                send_hold()
+                wait_until(lambda: held() == 1, 10, "retenida en el worker 0")
+            with self.only(p1, [p0, p1]):
+                send_hold()
+                wait_until(lambda: held() == 2, 10, "retenida en el worker 1")
+            c3 = send_hold()
+            wait_until(lambda: answered(c3), 10, "tercera respondida")
+            statuses.append(c3.read_response().status)
+            self.assertEqual(statuses, [503])
+        else:
+            # SO_REUSEPORT por worker (Linux): el núcleo decide el worker. Se
+            # abren esperas una a una; cada una o queda retenida en el backend
+            # o recibe 503 del worker que ya tiene su única conexión ocupada.
+            self.assertEqual(doc["master"]["listener_model"], "per_worker_reuseport")
+            for _ in range(40):
+                before = held()
+                c = send_hold()
+
+                def outcome(c=c, before=before):
+                    if held() > before:
+                        return "held"
+                    return "answered" if answered(c) else None
+
+                res = wait_until(outcome, 10, "retenida o respondida")
+                if res == "answered":
+                    statuses.append(c.read_response().status)
+                if held() >= 2:
+                    break
         # Con max_conns = 1 y dos workers el backend llega a 2 simultáneas...
         self.assertEqual(held(), 2)
         # ...pero nunca más: cada worker respeta su propio límite.
-        doc = self.proxy.stats()
+        doc = wait_until(lambda: self.all_ready(2), 10, "2 workers respondiendo")
         per_worker = [worker_backend(w, "a", self.A.port)["active"] for w in responded(doc)]
         self.assertEqual(sorted(per_worker), [1, 1])
         self.assertTrue(all(s == 503 for s in statuses), statuses)
@@ -303,6 +384,18 @@ class ScopeTest(Base):
             c.close()
         self.proxy.wait_quiescent()
         self.ok = True
+
+
+class SharedStartupTest(StartupTest):
+    """StartupTest con el modelo de escucha compartido (el de macOS) forzado."""
+
+    FORCE_SHARED = True
+
+
+class SharedScopeTest(ScopeTest):
+    """ScopeTest con el modelo de escucha compartido (el de macOS) forzado."""
+
+    FORCE_SHARED = True
 
 
 class ReloadTest(Base):
@@ -599,10 +692,9 @@ class ActivationFailureTest(Base):
         held = doc["workers"][1]["pid"]
         start = self.begin_reload()
         self.after(r"activación de la generación 2 retenida", start)
-        # Solo el worker de esta prueba, verificado por su línea de comandos.
-        self.assertTrue(pid_is(held, "proxy"))
-        self.stopped.append(held)
-        os.kill(held, signal.SIGSTOP)
+        # Solo el worker de esta prueba (hijo de este maestro, verificado);
+        # pause() espera a verlo detenido.
+        self.pause([held])
         m = self.after(rf"worker 1 \(pid {held}\) no confirmó la activación a tiempo: retirada "
                        r"con SIGTERM \(plazo (\d+) ms\)", start)
         retire_ms = int(m.group(1))
@@ -668,9 +760,7 @@ class ActivationFailureTest(Base):
         others = {doc["workers"][0]["pid"], doc["workers"][2]["pid"]}
         start = self.begin_reload()
         self.after(r"activación de la generación 2 retenida", start)
-        self.assertTrue(pid_is(held, "proxy"))
-        self.stopped.append(held)
-        os.kill(held, signal.SIGSTOP)  # no podrá procesar el SIGTERM de la retirada
+        self.pause([held])  # no podrá procesar el SIGTERM de la retirada
         self.after(rf"worker 1 \(pid {held}\) no confirmó la activación a tiempo: retirada", start)
         self.after(r"recarga aplicada: generación 2 con capacidad reducida", start)
         # Cierre global mientras el worker 1 sigue en retirada.
@@ -735,6 +825,55 @@ class SupervisionTest(Base):
         self.assertIn("todos los workers han fallado", out)
         self.assertEqual(self.proxy.alive_workers(), set())
         self.assertFalse(os.path.exists(self.proxy.stats_sock))
+        self.ok = True
+
+
+class SharedSupervisionTest(Base):
+    """Reposición de un worker con el modelo de escucha compartido forzado."""
+
+    FORCE_SHARED = True
+
+    def test_replacement_inherits_shared_listener_and_serves_current_generation(self):
+        base = {"a": ("round_robin", [(self.A.port, 1, 0)]),
+                "b": ("round_robin", [(self.B.port, 1, 0)])}
+        self.start(config(self.fe, base, workers=2, default="a"))
+        wait_until(lambda: self.all_ready(2), 10, "2 workers listos")
+        # Generación vigente distinta de la inicial: destino B en la 2.
+        self.proxy.reload(config(self.fe, base, workers=2, default="b"))
+        doc = wait_until(lambda: self.all_ready(2), 10, "2 workers en la generación 2")
+        self.assertEqual({w["generation"] for w in doc["workers"]}, {2})
+        old = doc["workers"][1]["pid"]
+        keep = doc["workers"][0]["pid"]
+
+        start = len(self.proxy.output())
+        self.assertTrue(self.proxy.is_own_worker(old))
+        os.kill(old, signal.SIGKILL)
+        r = self.proxy.wait_for(r"worker 1 repuesto \(pid (\d+), generación 2\)", scaled(15),
+                                start=start)
+        sub = int(r.group(1))
+        self.assertNotEqual(sub, old)
+        self.assertFalse(pid_alive(old))
+        # El sustituto adopta el socket heredado del maestro (no abre otro).
+        self.proxy.wait_for(rf"pid={sub} worker=1 [^\n]*escuchando en 127\.0\.0\.1:{self.fe} "
+                            r"\(socket compartido heredado del maestro\)", scaled(5), start=start)
+        doc = wait_until(lambda: self.all_ready(2), 10, "sustituto listo")
+        w1 = doc["workers"][1]
+        self.assertEqual((w1["pid"], w1["generation"], w1["restarts"]), (sub, 2, 1))
+        self.assertEqual(doc["workers"][0]["pid"], keep)
+        self.assertEqual(w1["counters"]["accepted"], 0)
+
+        # Tráfico servido por el sustituto: con el worker 0 detenido (observado)
+        # solo él puede aceptar de la cola compartida.
+        with self.only(sub, [keep, sub]):
+            for _ in range(3):
+                self.assertEqual(get(self.fe).json()["backend"], "B")
+        doc = wait_until(lambda: self.all_ready(2), 10, "workers reanudados")
+        w1 = doc["workers"][1]
+        self.assertEqual(w1["pid"], sub)
+        self.assertEqual(w1["counters"]["accepted"], 3)
+        self.assertEqual(worker_backend(w1, "b", self.B.port)["selected"], 3)
+        self.assertEqual(worker_backend(w1, "a", self.A.port)["selected"], 0)
+        self.assert_clean_exit()
         self.ok = True
 
 

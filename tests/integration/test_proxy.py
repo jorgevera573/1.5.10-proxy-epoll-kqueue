@@ -10,6 +10,7 @@ Uso: PROXY_BIN=build/src/proxy python3 tests/integration/test_proxy.py [-v]
 
 import hashlib
 import os
+import select
 import signal
 import socket
 import sys
@@ -32,6 +33,46 @@ from harness import (  # noqa: E402
 )
 
 PER_TEST_TIMEOUT = 60
+
+
+def handshake_blocked(addr, wait=0.2):
+    """True si un connect nuevo a `addr` no se completa en `wait` s (el núcleo
+    descarta el SYN porque la cola de aceptación está llena)."""
+    probe = socket.socket()
+    probe.setblocking(False)
+    try:
+        probe.connect_ex(addr)
+        _, w, _ = select.select([], [probe], [], wait)
+        if not w:
+            return True
+        err = probe.getsockopt(socket.SOL_SOCKET, socket.SO_ERROR)
+        if err:
+            raise RuntimeError(f"connect a {addr}: {os.strerror(err)} (se esperaba pendiente)")
+        return False
+    finally:
+        probe.close()
+
+
+def fill_accept_queue(addr, limit=512):
+    """Abre conexiones sin aceptar hasta que un handshake queda pendiente.
+
+    Devuelve las conexiones (hay que mantenerlas abiertas). Falla de forma
+    explícita si no lo consigue, en vez de probar otra cosa.
+    """
+    fillers = []
+    for _ in range(limit):
+        if handshake_blocked(addr):
+            return fillers
+        f = socket.socket()
+        f.setblocking(False)
+        f.connect_ex(addr)
+        _, w, _ = select.select([], [f], [], 1)
+        fillers.append(f)
+        if not w:  # esta ya quedó pendiente: la cola está llena
+            return fillers
+    for f in fillers:
+        f.close()
+    raise RuntimeError(f"no se pudo llenar la cola de aceptación de {addr} con {limit} conexiones")
 
 
 def config(fe1, fe2, a, b, down, shutdown_ms=3000, extra="", stuck=None):
@@ -148,17 +189,14 @@ class ProxyTest(unittest.TestCase):
             cls.B = cls.wd.add(Backend(cls.wd.path, "B"))
             cls.fe1, cls.fe2 = free_port(), free_port()
             cls.down = closed_port()
-            # Listener que nunca acepta y con la cola llena: Linux descarta los
-            # SYN siguientes y el connect del proxy queda pendiente.
+            # Listener que nunca acepta, con la cola llena: el núcleo descarta
+            # los SYN siguientes y el connect del proxy queda pendiente. El
+            # tamaño efectivo de la cola depende de la plataforma (Linux y
+            # macOS difieren), así que se llena por observación.
             cls.stuck = socket.socket()
             cls.stuck.bind(("127.0.0.1", 0))
             cls.stuck.listen(0)
-            cls.fillers = []
-            for _ in range(4):
-                f = socket.socket()
-                f.setblocking(False)
-                f.connect_ex(cls.stuck.getsockname())
-                cls.fillers.append(f)
+            cls.fillers = fill_accept_queue(cls.stuck.getsockname())
             cls.proxy = cls.wd.add(
                 Proxy(cls.wd.path, config(cls.fe1, cls.fe2, cls.A.port, cls.B.port, cls.down,
                                           stuck=cls.stuck.getsockname()[1]))
@@ -440,19 +478,31 @@ class ProxyTest(unittest.TestCase):
         self.assertEqual(get(self.fe1, "/hugehead").status, 502)  # cabecera > 16 KB
 
     def test_upstream_response_timeout_is_504(self):
+        a = f"127.0.0.1:{self.A.port}"
+        failures0 = self.proxy.backend("a", a)["failures"]
         t0 = time.monotonic()
         r = get(self.fe1, "/slow?delay_ms=%d" % int(scaled(4) * 1000))
         self.assertEqual(r.status, 504)
         self.assertLess(time.monotonic() - t0, scaled(3.5))
+        # La conexión se estableció: vence upstream_response_ms, que no es un
+        # fallo del backend (no cuenta).
+        self.assertEqual(self.proxy.backend("a", a)["failures"], failures0)
 
     def test_upstream_connect_timeout_is_504(self):
+        addr = self.stuck.getsockname()
+        stuck = f"127.0.0.1:{addr[1]}"
+        failures0 = self.proxy.backend("stuck", stuck)["failures"]
+        # La cola sigue llena: un handshake nuevo no se completa. Así el plazo
+        # que vence es el de conexión y no el de respuesta.
+        self.assertTrue(handshake_blocked(addr), "la cola del listener ya no está llena")
         t0 = time.monotonic()
         r = get(self.fe1, host="stuck.test")
         elapsed = time.monotonic() - t0
         self.assertEqual(r.status, 504)
         self.assertGreaterEqual(elapsed, scaled(0.8))  # upstream_connect_ms = 1 s
-        stuck = f"127.0.0.1:{self.stuck.getsockname()[1]}"
-        self.assertGreater(self.proxy.backend("stuck", stuck)["failures"], 0)
+        # Un fallo de conexión cuenta exactamente uno para ese backend.
+        self.assertEqual(self.proxy.backend("stuck", stuck)["failures"], failures0 + 1)
+        self.assertTrue(handshake_blocked(addr), "la cola del listener dejó de estar llena")
 
     def test_client_disconnect_mid_request_body(self):
         c = Conn(self.fe1)

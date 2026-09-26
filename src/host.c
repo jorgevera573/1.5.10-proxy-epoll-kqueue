@@ -42,11 +42,24 @@ static enum host_status parse_port(const char *p, size_t len, uint16_t *port) {
     return HOST_OK;
 }
 
+static bool is_hex(char c) {
+    return is_digit(c) || (c >= 'a' && c <= 'f') || (c >= 'A' && c <= 'F');
+}
+
 static enum host_status normalize_ipv6(const char *in, size_t len, struct host_name *out) {
     /* in apunta a lo que hay entre corchetes. */
     char tmp[INET6_ADDRSTRLEN];
     if (len == 0 || len >= sizeof(tmp)) {
         return HOST_BAD_IPV6;
+    }
+    /* Política propia, no la de inet_pton de cada plataforma (la de macOS
+     * acepta un identificador de zona "%..."): solo dígitos hexadecimales,
+     * ':' y '.' (IPv4 embebida). Se rechaza cualquier identificador de zona
+     * (RFC 6874, "%25eth0") y cualquier otro carácter. */
+    for (size_t i = 0; i < len; i++) {
+        if (!is_hex(in[i]) && in[i] != ':' && in[i] != '.') {
+            return HOST_BAD_IPV6;
+        }
     }
     memcpy(tmp, in, len);
     tmp[len] = '\0';

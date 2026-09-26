@@ -444,21 +444,31 @@ struct mask_ctx {
     int fd_a;
     int fd_b;
     int calls;
-    uint32_t second_events;
+    int modified;       /* fd al que el primer callback quitó IO_WRITE */
+    int modified_calls; /* callbacks del fd modificado tras la modificación */
+    uint32_t modified_events;
+    uint32_t original_events; /* callbacks posteriores del fd que modificó */
 };
 
 /*
  * El primero que se ejecute quita IO_WRITE al otro fd. El otro ya tiene en el
- * lote un evento con escritura lista, que no debe entregarse.
+ * lote la escritura lista, que no debe entregarse.
+ *
+ * Los eventos se separan por descriptor: con kqueue lectura y escritura del
+ * mismo fd llegan como entradas distintas (§3.1), así que el fd que hizo la
+ * modificación puede recibir después su propio IO_WRITE legítimo.
  */
 static void cb_mod_other(io_loop *loop, int fd, uint32_t events, void *ud) {
     struct mask_ctx *c = ud;
     c->calls++;
     if (c->calls == 1) {
-        int other = fd == c->fd_a ? c->fd_b : c->fd_a;
-        assert_int_equal(io_loop_mod(loop, other, IO_READ), 0);
+        c->modified = fd == c->fd_a ? c->fd_b : c->fd_a;
+        assert_int_equal(io_loop_mod(loop, c->modified, IO_READ), 0);
+    } else if (fd == c->modified) {
+        c->modified_calls++;
+        c->modified_events |= events;
     } else {
-        c->second_events |= events;
+        c->original_events |= events;
     }
 }
 
@@ -467,7 +477,7 @@ static void test_mod_in_callback_masks_batch_events(void **state) {
     int other[2];
     make_pair(other);
 
-    struct mask_ctx c = {.fd_a = fx->sv[0], .fd_b = other[0]};
+    struct mask_ctx c = {.fd_a = fx->sv[0], .fd_b = other[0], .modified = -1};
     /* Ambos listos para leer y escribir en el mismo lote. */
     write_all(fx->sv[1], "1", 1);
     write_all(other[1], "2", 1);
@@ -476,8 +486,14 @@ static void test_mod_in_callback_masks_batch_events(void **state) {
 
     int n = io_loop_run_once(fx->loop, 1000);
     assert_true(n >= 2);
-    assert_true(c.second_events & IO_READ);
-    assert_false(c.second_events & IO_WRITE);
+    /* El fd modificado recibe su lectura pendiente, pero nunca la escritura
+     * obsoleta que ya estaba en el lote. */
+    assert_true(c.modified == c.fd_a || c.modified == c.fd_b);
+    assert_true(c.modified_calls >= 1);
+    assert_true(c.modified_events & IO_READ);
+    assert_false(c.modified_events & IO_WRITE);
+    /* El otro fd conserva su interés: lo que reciba está dentro de él. */
+    assert_int_equal(c.original_events & ~(uint32_t)(IO_READ | IO_WRITE), 0);
 
     assert_int_equal(io_loop_del(fx->loop, other[0]), 0);
     close(other[0]);

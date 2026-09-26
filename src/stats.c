@@ -320,7 +320,7 @@ static void worker_line(void *ctx, bool is_worker, const struct line *l) {
 static void render_master(struct sb *b, const struct stats_master_info *m) {
     sbf(b,
         "\"master\":{\"pid\":%ld,\"uptime_ms\":%llu,\"generation\":%llu,"
-        "\"workers_configured\":%u,\"workers_ready\":%u,\"degraded\":%s,"
+        "\"workers_configured\":%u,\"workers_ready\":%u,\"degraded\":%s,\"listener_model\":\"%s\","
         "\"reload_in_progress\":%s,\"reload_state\":\"%s\","
         "\"recovery\":{\"state\":\"%s\",\"generation\":%llu},\"draining\":%s,"
         "\"reloads_ok\":%llu,\"reloads_failed\":%llu,\"worker_restarts\":%llu,"
@@ -328,6 +328,7 @@ static void render_master(struct sb *b, const struct stats_master_info *m) {
         m->pid, (unsigned long long)m->uptime_ms, (unsigned long long)m->generation,
         m->workers_configured, m->workers_ready,
         m->workers_ready < m->workers_configured ? "true" : "false",
+        m->listener_model != NULL ? m->listener_model : "per_worker_reuseport",
         m->reload_in_progress ? "true" : "false",
         m->reload_state != NULL ? m->reload_state : "idle",
         m->recovery != NULL ? m->recovery : "none", (unsigned long long)m->recovery_generation,

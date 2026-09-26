@@ -57,6 +57,10 @@ Docker Hub; las versiones de PyPI, de su API JSON.
 
 ## Estado
 
-Los dos pipelines están **preparados, no ejecutados**. Localmente se
-simularon sus pasos con las herramientas fijadas (ver
-`docs/verification.md`, sección CI).
+GitHub Actions se ejecutó en remoto (ejecución 36250381456, commit
+`1e45556a`; resultados en `docs/verification.md`); los cambios posteriores
+aún no se han ejecutado allí. Del pipeline de GitLab no hay evidencia
+registrada en este repositorio. Localmente se simularon los pasos de ambos
+con las herramientas fijadas (ver `docs/verification.md`, sección CI).
+Los jobs de Linux instalan `procps` de forma explícita: las pruebas de
+integración usan `ps` para identificar los workers de cada maestro.

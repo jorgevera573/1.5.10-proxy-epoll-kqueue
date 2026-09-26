@@ -97,6 +97,9 @@ struct master {
     int sig_wr;
     struct slot *slots;
     size_t nslots;
+    enum listener_model lmodel;
+    int *listen_fds; /* modelo compartido: uno por frontend; NULL si por worker */
+    size_t nlisten;
     int stats_fd;
     dev_t stats_dev;
     ino_t stats_ino;
@@ -341,12 +344,49 @@ static void child_main(struct master *m, int index, int fd) {
     default_signals();
     struct config *cfg = config_ref(m->cfg);
     uint64_t gen = m->gen;
+    /* Modelo compartido: el worker se queda con las copias heredadas de los
+     * listeners (release_in_child no las cierra: ya no son del maestro). */
+    int *shared = m->listen_fds;
+    m->listen_fds = NULL;
     release_in_child(m);
     /* Grupo propio: un Ctrl+C del terminal llega solo al maestro. */
     (void)setpgid(0, 0);
-    int rc = worker_run(cfg, gen, fd, index);
+    int rc = worker_run(cfg, gen, fd, index, shared);
+    free(shared);
     config_unref(cfg);
     _exit(rc);
+}
+
+/* Modelo compartido: el maestro abre un socket por frontend antes de crear
+ * workers; cada fork hereda una copia. 0 o -1 (ya registrado). */
+static int open_shared_listeners(struct master *m) {
+    m->nlisten = m->cfg->nfrontends;
+    m->listen_fds = malloc(m->nlisten * sizeof(int));
+    if (m->listen_fds == NULL) {
+        return -1;
+    }
+    for (size_t i = 0; i < m->nlisten; i++) {
+        m->listen_fds[i] = -1;
+    }
+    for (size_t i = 0; i < m->nlisten; i++) {
+        char err[256];
+        m->listen_fds[i] = listener_open(&m->cfg->frontends[i], false, err, sizeof(err));
+        if (m->listen_fds[i] < 0) {
+            plog(LOG_ERROR, 0, "arranque fallido: no se puede escuchar en %s", err);
+            return -1;
+        }
+    }
+    return 0;
+}
+
+/* El maestro suelta sus copias: sin ellas, cuando los workers cierran las
+ * suyas el puerto deja de aceptar (no se acumulan conexiones en la cola). */
+static void close_shared_listeners(struct master *m) {
+    for (size_t i = 0; m->listen_fds != NULL && i < m->nlisten; i++) {
+        close_fd(&m->listen_fds[i]);
+    }
+    free(m->listen_fds);
+    m->listen_fds = NULL;
 }
 
 static void on_slot_io(io_loop *loop, int fd, uint32_t events, void *ud);
@@ -415,6 +455,7 @@ static void begin_shutdown(struct master *m) {
         return;
     }
     m->draining = true;
+    close_shared_listeners(m); /* no habrá más workers que los hereden */
     plog(LOG_INFO, m->gen, "cierre ordenado del maestro (%zu workers, plazo %u ms)",
          live_workers(m), m->cfg->shutdown_timeout_ms);
     if (m->rstate != R_IDLE) {
@@ -985,6 +1026,7 @@ static void stats_render(struct stats_client *c) {
                                    .workers_configured = (uint32_t)m->nslots,
                                    .reload_in_progress = m->rstate != R_IDLE,
                                    .reload_state = reload_state_name(m->rstate),
+                                   .listener_model = listener_model_name(m->lmodel),
                                    .recovery = recovery_name(m->recovery),
                                    .recovery_generation = m->recovery_gen,
                                    .workers_ready = (uint32_t)ready_workers(m),
@@ -1355,6 +1397,20 @@ int master_run(struct config *cfg, char *text, size_t text_len, const char *path
         timer_init(&s->ready_timer, on_ready_timeout, s);
         timer_init(&s->retire_timer, on_retire_timeout, s);
     }
+    m.lmodel = listener_default_model();
+#ifdef PROXY_TEST_HOOKS
+    /* Solo en proxy-testhooks: probar en Linux el modelo de macOS. */
+    if (getenv("PROXY_TEST_SHARED_LISTENERS") != NULL) { // NOLINT(concurrency-mt-unsafe)
+        m.lmodel = LISTENER_SHARED;
+        plog(LOG_WARN, 0, "VARIANTE DE PRUEBAS: modelo de escucha compartido forzado");
+    }
+#endif
+    if (rc == 0) {
+        plog(LOG_INFO, 0, "modelo de escucha: %s", listener_model_name(m.lmodel));
+    }
+    if (rc == 0 && m.lmodel == LISTENER_SHARED && open_shared_listeners(&m) < 0) {
+        rc = 1;
+    }
     if (rc == 0 && stats_open(&m) < 0) {
         rc = 1;
     }
@@ -1395,6 +1451,7 @@ int master_run(struct config *cfg, char *text, size_t text_len, const char *path
     }
 
     /* Limpieza: sin hijos vivos (el bucle termina al recogerlos todos). */
+    close_shared_listeners(&m);
     stats_close(&m);
     if (m.rstate == R_PREPARING) {
         reload_release_candidate(&m);

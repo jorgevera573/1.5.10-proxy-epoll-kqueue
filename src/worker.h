@@ -86,7 +86,8 @@ struct worker {
     buffer_pool *bufs;
     int *listen_fds;
     size_t nlisten;
-    int spare_fd; /* reservado para descartar conexiones con EMFILE */
+    bool shared_listeners; /* heredados del maestro (modelo compartido) */
+    int spare_fd;          /* reservado para descartar conexiones con EMFILE */
     timer accept_retry;
     int sig_rd;
     int sig_wr;
@@ -113,10 +114,13 @@ struct worker {
 
 /*
  * Ejecuta el worker `index` con `cfg` como generación `gen_id` y el canal
- * `ctl_fd` con el maestro (-1: sin maestro, solo pruebas). Devuelve el código
- * de salida: 0 limpio, 1 fallo de arranque, 70 recursos prestados al salir.
+ * `ctl_fd` con el maestro (-1: sin maestro, solo pruebas). `shared_fds`:
+ * listeners heredados del maestro, uno por frontend (modelo compartido; el
+ * worker toma su propiedad), o NULL para abrir los suyos con SO_REUSEPORT.
+ * Devuelve el código de salida: 0 limpio, 1 fallo de arranque, 70 recursos
+ * prestados al salir.
  */
-int worker_run(struct config *cfg, uint64_t gen_id, int ctl_fd, int index);
+int worker_run(struct config *cfg, uint64_t gen_id, int ctl_fd, int index, const int *shared_fds);
 
 /* Registra en stderr un cambio de salud de un backend. */
 void worker_log_transition(struct worker *w, const backend_pools *gen, uint32_t pool,

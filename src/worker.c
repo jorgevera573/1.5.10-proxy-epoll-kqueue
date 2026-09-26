@@ -836,7 +836,9 @@ static int worker_start(struct worker *w) {
     }
     for (size_t i = 0; i < w->nlisten; i++) {
         char err[256];
-        w->listen_fds[i] = listener_open(&cfg->frontends[i], err, sizeof(err));
+        if (w->listen_fds[i] < 0) {
+            w->listen_fds[i] = listener_open(&cfg->frontends[i], true, err, sizeof(err));
+        }
         if (w->listen_fds[i] < 0) {
             plog(LOG_ERROR, 0, "no se puede escuchar en %s", err);
             return 1;
@@ -845,7 +847,9 @@ static int worker_start(struct worker *w) {
             plog(LOG_ERROR, 0, "io_loop_add: %s", diag_strerror(errno, eb, sizeof(eb)));
             return 1;
         }
-        plog(LOG_INFO, 0, "escuchando en %s", cfg->frontends[i].listen.text);
+        plog(LOG_INFO, 0, "escuchando en %s (%s)", cfg->frontends[i].listen.text,
+             w->shared_listeners ? "socket compartido heredado del maestro"
+                                 : "socket propio con SO_REUSEPORT");
     }
     w->health = health_start();
     if (w->health == NULL ||
@@ -874,10 +878,20 @@ static logger *open_worker_log(const struct config *cfg, int index) {
     return lg;
 }
 
-int worker_run(struct config *cfg, uint64_t gen_id, int ctl_fd, int index) {
+/* Cierra los listeners heredados que el worker no llegó a adoptar. */
+static void close_inherited(const int *fds, size_t n) {
+    for (size_t i = 0; fds != NULL && i < n; i++) {
+        if (fds[i] >= 0) {
+            close(fds[i]);
+        }
+    }
+}
+
+int worker_run(struct config *cfg, uint64_t gen_id, int ctl_fd, int index, const int *shared_fds) {
     log_set_role(index);
     logger *lg = open_worker_log(cfg, index);
     if (lg == NULL) {
+        close_inherited(shared_fds, cfg->nfrontends);
         return 1;
     }
     log_install(lg);
@@ -912,6 +926,7 @@ int worker_run(struct config *cfg, uint64_t gen_id, int ctl_fd, int index) {
         char eb[64];
         plog(LOG_ERROR, 0, "sin recursos para iniciar: %s", diag_strerror(errno, eb, sizeof(eb)));
         free(w.listen_fds);
+        close_inherited(shared_fds, cfg->nfrontends);
         backend_pools_unref(w.gen);
         backend_registry_destroy(w.registry);
         buffer_pool_destroy(w.bufs);
@@ -923,8 +938,11 @@ int worker_run(struct config *cfg, uint64_t gen_id, int ctl_fd, int index) {
     }
     w.nlisten = cfg->nfrontends;
     for (size_t i = 0; i < w.nlisten; i++) {
-        w.listen_fds[i] = -1;
+        /* Modelo compartido: el worker adopta su copia heredada del maestro
+         * (la cierra al dejar de aceptar); si no, abre la suya. */
+        w.listen_fds[i] = shared_fds != NULL ? shared_fds[i] : -1;
     }
+    w.shared_listeners = shared_fds != NULL;
 
     rc = worker_start(&w);
     if (rc == 0) {

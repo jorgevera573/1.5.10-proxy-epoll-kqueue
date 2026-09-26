@@ -64,6 +64,62 @@ def wait_until(pred, timeout, what="condición", interval=0.02):
     raise TimeoutError(f"no se cumplió {what} en {scaled(timeout):.1f}s (último: {last!r})")
 
 
+class PsUnavailable(RuntimeError):
+    """`ps` no está instalado o no funciona: no se puede identificar procesos."""
+
+
+def process_info(pid):
+    """(ppid, línea de comandos) del proceso, o None si no existe.
+
+    Usa `ps`, disponible con las mismas opciones en Linux (paquete procps) y
+    macOS (no hay /proc en macOS). Un zombi aún no recogido también aparece.
+    Si `ps` falta o falla, lanza PsUnavailable con el diagnóstico: nunca se
+    confunde con "el proceso no existe".
+    """
+    argv = ["ps", "-o", "ppid=", "-o", "command=", "-p", str(pid)]
+    try:
+        r = subprocess.run(argv, capture_output=True, text=True, timeout=10, check=False)
+    except FileNotFoundError as e:
+        raise PsUnavailable(
+            "no se encuentra `ps` (en Debian/Ubuntu: apt-get install procps); las pruebas "
+            "lo usan para identificar los workers de su maestro") from e
+    except (OSError, subprocess.TimeoutExpired) as e:
+        raise PsUnavailable(f"no se pudo ejecutar {' '.join(argv)}: {e}") from e
+    line = r.stdout.strip()
+    if not line:
+        if r.returncode != 0 and r.stderr.strip():
+            raise PsUnavailable(f"{' '.join(argv)} falló (código {r.returncode}): "
+                                f"{r.stderr.strip()}")
+        return None  # sin salida: el proceso no existe
+    ppid, _, cmd = line.partition(" ")
+    try:
+        return int(ppid), cmd.strip()
+    except ValueError:
+        return None
+
+
+def process_state(pid):
+    """Estado de `ps -o stat=` (p. ej. "S", "R", "T" detenido, "Z"), o None si
+    el proceso no existe. Mismo significado en Linux y macOS."""
+    argv = ["ps", "-o", "stat=", "-p", str(pid)]
+    try:
+        r = subprocess.run(argv, capture_output=True, text=True, timeout=10, check=False)
+    except FileNotFoundError as e:
+        raise PsUnavailable(
+            "no se encuentra `ps` (en Debian/Ubuntu: apt-get install procps)") from e
+    except (OSError, subprocess.TimeoutExpired) as e:
+        raise PsUnavailable(f"no se pudo ejecutar {' '.join(argv)}: {e}") from e
+    state = r.stdout.strip()
+    if not state and r.returncode != 0 and r.stderr.strip():
+        raise PsUnavailable(f"{' '.join(argv)} falló: {r.stderr.strip()}")
+    return state or None
+
+
+def is_stopped(pid):
+    state = process_state(pid)
+    return state is not None and state.startswith("T")
+
+
 class Proc:
     """Proceso hijo con salida en fichero, terminado solo por su PID."""
 
@@ -219,16 +275,28 @@ class Proxy(Proc):
         self._collect_worker_pids()
         for pid in self.worker_pids:
             try:
-                with open(f"/proc/{pid}/cmdline", "rb") as f:
-                    cmd = f.read()
-            except OSError:
-                continue
-            if os.path.basename(self.binary).encode() in cmd:
+                ours = self.runs_our_binary(pid)
+            except PsUnavailable as e:
+                # La limpieza no debe abortar, pero tampoco callar.
+                print(f"(limpieza de workers omitida: {e})", file=sys.stderr)
+                break
+            if ours:
                 try:
                     os.kill(pid, signal.SIGKILL)
                 except OSError:
                     pass
         return rc
+
+    def runs_our_binary(self, pid):
+        """¿Sigue `pid` ejecutando el binario de este proxy? (Linux y macOS)"""
+        info = process_info(pid)
+        return info is not None and os.path.basename(self.binary) in info[1]
+
+    def is_own_worker(self, pid):
+        """¿Es `pid` un hijo vivo de ESTE maestro que ejecuta su binario?"""
+        info = process_info(pid)
+        return (info is not None and info[0] == self.p.pid
+                and os.path.basename(self.binary) in info[1])
 
     def alive_workers(self):
         """PIDs de workers arrancados por este maestro que siguen vivos."""

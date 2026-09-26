@@ -24,9 +24,9 @@ default:
     - apt-get install -y --no-install-recommends ca-certificates
     - apt-get install -y --no-install-recommends
         ca-certificates gcc clang llvm libclang-rt-18-dev
-        python3 python3-venv pkg-config
+        python3 python3-venv pkg-config procps
         valgrind cppcheck xz-utils
-    - dpkg-query -W libc6 libc6-dev libc6-dbg gcc clang llvm python3 valgrind cppcheck ca-certificates
+    - dpkg-query -W libc6 libc6-dev libc6-dbg gcc clang llvm python3 procps valgrind cppcheck ca-certificates
     - bash scripts/ci.sh tools
 
 stages:
