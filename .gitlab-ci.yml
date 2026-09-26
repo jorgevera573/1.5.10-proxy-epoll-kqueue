@@ -7,6 +7,8 @@
 # no están disponibles en todos los planes. Ver .github/workflows/ci.yml.
 #
 # Fijaciones:
+#   - excepción de bootstrap: ca-certificates y sus dependencias se instalan
+#     primero desde los repositorios normales para habilitar HTTPS;
 #   - imagen ubuntu:24.04 por digest (índice multi-arquitectura);
 #   - paquetes apt desde snapshot.ubuntu.com en una fecha fija
 #     (APT_SNAPSHOT), por lo que las versiones de gcc/clang/valgrind/cppcheck
@@ -22,7 +24,10 @@ default:
   interruptible: true
   before_script:
     - export DEBIAN_FRONTEND=noninteractive
-    - apt-get update --snapshot "$APT_SNAPSHOT"
+    # Bootstrap de certificados desde los repositorios normales.
+    - apt-get update --error-on=any
+    - apt-get install -y --no-install-recommends ca-certificates
+    - apt-get update --error-on=any --snapshot "$APT_SNAPSHOT"
     - apt-get install -y --no-install-recommends --snapshot "$APT_SNAPSHOT"
         ca-certificates gcc clang llvm python3 python3-venv pkg-config
         valgrind cppcheck xz-utils
