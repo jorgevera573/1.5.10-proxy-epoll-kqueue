@@ -1,0 +1,74 @@
+# Configuración de demostración (docs/demo.md).
+# Dos frontends en puertos no privilegiados y dos backends identificables.
+
+[server]
+workers = 3                 # procesos worker; 0 = uno por CPU (no recargable)
+max_connections = 1024      # por worker; no recargable
+shutdown_timeout_ms = 10000
+
+[limits]
+max_header_bytes = 16384
+max_request_line = 8192
+max_headers = 100
+max_body_bytes = 0          # 0 = sin límite
+max_requests_per_connection = 1000
+
+[timeouts]
+client_header_ms = 10000
+client_idle_ms = 60000
+upstream_connect_ms = 3000
+upstream_response_ms = 30000
+io_idle_ms = 30000
+close_ms = 2000
+
+[[frontend]]
+listen = "127.0.0.1:7777"
+
+[[frontend]]
+listen = "127.0.0.1:7778"
+# En este frontend se aceptan las X-Forwarded-* que envíe 127.0.0.1
+# (como si delante hubiera otro proxy local de confianza).
+trusted_proxies = ["127.0.0.1"]
+
+[[pool]]
+name = "a"
+[[pool.backend]]
+address = "127.0.0.1:3000"
+
+[[pool]]
+name = "b"
+[[pool.backend]]
+address = "127.0.0.1:3001"
+
+[[pool]]
+name = "ab"
+algorithm = "round_robin"      # también "weighted" y "least_conn"
+[pool.health]                  # sondas activas en el hilo de health
+type = "http"
+path = "/health"
+interval_ms = 1000
+timeout_ms = 500
+fall = 2                       # 2 fallos seguidos -> excluido
+rise = 2                       # 2 éxitos seguidos -> readmitido
+passive_fall = 1               # un fallo real de conexión -> excluido
+[[pool.backend]]
+address = "127.0.0.1:3000"
+[[pool.backend]]
+address = "127.0.0.1:3001"
+
+[[route]]
+host = "api.example.com"    # exacto
+pool = "a"
+
+[[route]]
+host = "*.example.com"      # wildcard
+pool = "b"
+
+[routing]
+default_pool = "ab"         # por defecto: round robin entre A y B
+
+# Estadísticas JSON por socket UNIX (no recargable). scripts/demo.sh sustituye
+# esta ruta por $DEMO_DIR/stats.sock al copiar la configuración.
+[stats]
+socket = "/tmp/proxy-stats.sock"
+mode = 0o600

@@ -1,0 +1,36 @@
+# Directorios de build de Meson
+/build/
+/build-*/
+/builddir/
+*.o
+*.a
+*.so
+*.dylib
+
+# Resultados de herramientas
+/meson-logs/
+/meson-private/
+compile_commands.json
+*.gcda
+*.gcno
+*.profraw
+vgcore.*
+core
+core.*
+
+# Temporales y editores
+*.tmp
+*.swp
+*~
+.DS_Store
+.vscode/
+.idea/
+.cache/
+
+# Dependencias descargadas por los wraps de Meson (solo se versiona el .wrap)
+/subprojects/*
+!/subprojects/*.wrap
+
+# Python
+__pycache__/
+*.pyc

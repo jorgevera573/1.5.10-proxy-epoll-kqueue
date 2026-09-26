@@ -1,0 +1,90 @@
+# GitLab CI — Linux.
+#
+# ESTADO: preparado, NO ejecutado. No se ha lanzado ningún pipeline remoto;
+# ver docs/verification.md. Requiere un runner Linux con el executor docker
+# (en GitLab.com, los runners compartidos; en una instancia propia, depende
+# de su configuración). macOS no se cubre aquí: los runners macOS de GitLab
+# no están disponibles en todos los planes. Ver .github/workflows/ci.yml.
+#
+# Fijaciones:
+#   - imagen ubuntu:24.04 por digest (índice multi-arquitectura);
+#   - paquetes apt desde snapshot.ubuntu.com en una fecha fija
+#     (APT_SNAPSHOT), por lo que las versiones de gcc/clang/valgrind/cppcheck
+#     no cambian entre ejecuciones;
+#   - meson, ninja, clang-format y clang-tidy por versión exacta
+#     (ci/requirements.txt);
+#   - cmocka 1.1.8 por SHA-256 (subprojects/cmocka.wrap).
+# Los scripts se invocan con `bash`: el repositorio se ha preparado con
+# core.filemode=false y no se garantiza el bit de ejecución.
+
+default:
+  image: ubuntu:24.04@sha256:008173c23f95b170204355c12626cb5a965d779a7e1283b09e9cffbb1bf33ca3
+  interruptible: true
+  before_script:
+    - export DEBIAN_FRONTEND=noninteractive
+    - apt-get update --snapshot "$APT_SNAPSHOT"
+    - apt-get install -y --no-install-recommends --snapshot "$APT_SNAPSHOT"
+        ca-certificates gcc clang llvm python3 python3-venv pkg-config
+        valgrind cppcheck xz-utils
+    - bash scripts/ci.sh tools
+
+variables:
+  APT_SNAPSHOT: "20260901T000000Z"
+
+stages:
+  - build
+  - analysis
+
+build:gcc:
+  stage: build
+  script:
+    - CC=gcc bash scripts/ci.sh build-test build-gcc
+  artifacts:
+    when: always
+    paths:
+      - build-gcc/meson-logs/
+
+build:clang:
+  stage: build
+  script:
+    - CC=clang bash scripts/ci.sh build-test build-clang
+  artifacts:
+    when: always
+    paths:
+      - build-clang/meson-logs/
+
+sanitizers:
+  stage: analysis
+  script:
+    - export UBSAN_OPTIONS=halt_on_error=1:print_stacktrace=1
+    - CC=clang bash scripts/ci.sh build-test build-asan -Db_sanitize=address,undefined -Db_lundef=false
+  artifacts:
+    when: always
+    paths:
+      - build-asan/meson-logs/
+
+valgrind:
+  stage: analysis
+  script:
+    # Ejecución separada de los sanitizers: build sin instrumentar.
+    - CC=gcc bash scripts/ci.sh build-test build-vg
+    - bash scripts/ci.sh valgrind build-vg
+  artifacts:
+    when: always
+    paths:
+      - build-vg/meson-logs/
+
+tsan:
+  stage: analysis
+  script:
+    - CC=clang bash scripts/ci.sh tsan build-tsan
+  artifacts:
+    when: always
+    paths:
+      - build-tsan/meson-logs/
+
+lint:
+  stage: analysis
+  script:
+    - CC=clang .venv/bin/meson setup build-lint --force-fallback-for=cmocka
+    - bash scripts/ci.sh lint build-lint

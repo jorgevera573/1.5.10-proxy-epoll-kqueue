@@ -1,0 +1,9 @@
+# Herramientas Python fijadas para CI (instaladas en un venv por scripts/ci.sh).
+# meson y ninja: mismas versiones verificadas localmente (docs/verification.md).
+meson==1.10.1
+ninja==1.13.2
+# clang-format: la misma versión que la local; otra versión puede formatear
+# distinto y romper format-check.
+clang-format==21.1.8
+# clang-tidy: 21.1.8 no está publicado en PyPI; se usa la 21.1.6 (misma rama).
+clang-tidy==21.1.6

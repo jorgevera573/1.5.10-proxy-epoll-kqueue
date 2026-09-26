@@ -1,0 +1,55 @@
+# clang-tidy para el código propio (src/, tests/). Verificado con 21.1.8.
+# scripts/lint.sh solo pasa ficheros propios; HeaderFilterRegex limita los
+# avisos de cabeceras a src/, de modo que subprojects/ (cmocka) y las
+# cabeceras del sistema quedan fuera.
+#
+# Familias activadas: bugprone, cert, clang-analyzer, concurrency, misc,
+# performance, portability y la complejidad cognitiva de readability.
+#
+# Exclusiones razonadas:
+#   bugprone-easily-swappable-parameters
+#       Las APIs (buf, len), (fd, events) son idiomáticas; el aviso aparece
+#       en casi toda función y no señala defectos.
+#   misc-include-cleaner
+#       Sin un mapeo IWYU fiable para glibc y macOS pide cabeceras internas
+#       distintas por plataforma.
+#   clang-analyzer-security.insecureAPI.DeprecatedOrUnsafeBufferHandling
+#       Propone memcpy_s/memset_s (Anexo K de C11), que ni glibc ni macOS
+#       implementan de forma portable. Los límites se comprueban a mano y
+#       con ASan.
+#   clang-analyzer-optin.performance.Padding
+#       Recomienda reordenar campos de client_conn por relleno; se prioriza
+#       agruparlos por función. La memoria por conexión la dominan los slots
+#       de 16 KB, no el relleno.
+#   cert-dcl03-c, misc-static-assert
+#       Sugieren convertir assert() en _Static_assert en casos no aplicables.
+#   Resto de readability-*
+#       Estilo (longitud de identificadores, números mágicos del protocolo
+#       HTTP, sufijos de literales): lo fija .clang-format y la revisión.
+#
+# readability-function-cognitive-complexity: umbral 40. Los analizadores
+# incrementales son máquinas de estados; por encima de 40 se exige dividir
+# la función o justificar un NOLINT en el código.
+Checks: >
+  -*,
+  bugprone-*,
+  cert-*,
+  clang-analyzer-*,
+  concurrency-*,
+  misc-*,
+  performance-*,
+  portability-*,
+  readability-function-cognitive-complexity,
+  -bugprone-easily-swappable-parameters,
+  -misc-include-cleaner,
+  -clang-analyzer-security.insecureAPI.DeprecatedOrUnsafeBufferHandling,
+  -cert-dcl03-c,
+  -misc-static-assert,
+  -clang-analyzer-optin.performance.Padding
+WarningsAsErrors: '*'
+HeaderFilterRegex: '.*/src/[^/]*\.h$'
+CheckOptions:
+  - key: readability-function-cognitive-complexity.Threshold
+    value: 40
+  - key: readability-function-cognitive-complexity.IgnoreMacros
+    value: true

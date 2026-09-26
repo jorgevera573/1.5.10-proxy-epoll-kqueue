@@ -1,0 +1,92 @@
+# GitHub Actions — Linux y macOS.
+#
+# ESTADO: preparado, NO ejecutado. El repositorio remoto actual es GitLab;
+# este workflow solo corre si el proyecto se publica en GitHub. Ningún
+# resultado de macOS se considera verificado hasta disponer de una ejecución
+# real (docs/verification.md).
+#
+# Fijaciones: acciones por SHA de commit (con la etiqueta en comentario),
+# runners por etiqueta de versión (no *-latest), herramientas Python por
+# versión exacta (ci/requirements.txt) y cmocka 1.1.8 por SHA-256
+# (subprojects/cmocka.wrap). Los compiladores y paquetes del sistema son los
+# de la imagen del runner (ubuntu-24.04 / macos-15) más apt en el momento de
+# la ejecución: no se usa snapshot de apt porque los runners apuntan a un
+# mirror propio cuyo soporte de snapshot no está verificado. Sus versiones
+# quedan registradas en el log (paso "Entorno").
+name: ci
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  build-test:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, macos-15]
+        cc: [clang]
+        include:
+          - os: ubuntu-24.04
+            cc: gcc
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+      - name: Paquetes del sistema (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            gcc clang python3-venv pkg-config valgrind
+      - name: Herramientas fijadas
+        run: bash scripts/ci.sh tools
+      - name: Entorno
+        run: |
+          uname -a
+          ${{ matrix.cc }} --version
+          if command -v valgrind >/dev/null; then valgrind --version; fi
+      - name: Build y tests
+        env:
+          CC: ${{ matrix.cc }}
+        run: bash scripts/ci.sh build-test build
+      - name: Sanitizers (ASan + UBSan)
+        env:
+          CC: ${{ matrix.cc }}
+          UBSAN_OPTIONS: halt_on_error=1:print_stacktrace=1
+        run: bash scripts/ci.sh build-test build-asan -Db_sanitize=address,undefined -Db_lundef=false
+      - name: ThreadSanitizer (solo Linux, clang)
+        if: runner.os == 'Linux' && matrix.cc == 'clang'
+        env:
+          CC: clang
+        run: bash scripts/ci.sh tsan build-tsan
+      - name: Valgrind (solo Linux)
+        if: runner.os == 'Linux'
+        run: bash scripts/ci.sh valgrind build
+      - name: Logs de Meson
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02  # v4.6.2
+        with:
+          name: meson-logs-${{ matrix.os }}-${{ matrix.cc }}
+          path: |
+            build/meson-logs/
+            build-asan/meson-logs/
+
+  lint:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+      - name: Paquetes del sistema
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            clang python3-venv pkg-config cppcheck
+          cppcheck --version
+      - name: Herramientas fijadas
+        run: bash scripts/ci.sh tools
+      - name: format-check, clang-tidy y cppcheck
+        run: |
+          CC=clang .venv/bin/meson setup build-lint --force-fallback-for=cmocka
+          bash scripts/ci.sh lint build-lint

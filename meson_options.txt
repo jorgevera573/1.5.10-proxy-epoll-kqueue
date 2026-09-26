@@ -1,0 +1,6 @@
+option('io_backend', type: 'combo', choices: ['auto', 'epoll', 'kqueue'], value: 'auto',
+       description: 'Backend de io_event; auto elige epoll en Linux y kqueue en macOS/BSD')
+option('tests', type: 'feature', value: 'auto',
+       description: 'Compila las pruebas cmocka')
+option('integration_tests', type: 'feature', value: 'auto',
+       description: 'Pruebas de integración (requieren python3)')

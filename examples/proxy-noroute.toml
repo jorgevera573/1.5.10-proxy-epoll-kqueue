@@ -1,0 +1,12 @@
+# Variante sin ruta por defecto: un Host sin ruta recibe 502.
+[[frontend]]
+listen = "127.0.0.1:7779"
+
+[[pool]]
+name = "a"
+[[pool.backend]]
+address = "127.0.0.1:3000"
+
+[[route]]
+host = "api.example.com"
+pool = "a"

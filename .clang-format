@@ -1,0 +1,27 @@
+# Estilo del código propio (src/, tests/). Verificado con clang-format 21.1.8;
+# la CI fija esa misma versión porque otras pueden formatear distinto.
+# Las dependencias externas (subprojects/) quedan fuera: ver
+# .clang-format-ignore y scripts/lint.sh.
+---
+Language: Cpp
+BasedOnStyle: LLVM
+IndentWidth: 4
+ColumnLimit: 100
+# Mantiene los grupos de #include tal como se escriben: propia cabecera,
+# cabeceras del proyecto y del sistema separadas por líneas en blanco.
+IncludeBlocks: Preserve
+SortIncludes: CaseSensitive
+PointerAlignment: Right
+AllowShortFunctionsOnASingleLine: None
+AllowShortIfStatementsOnASingleLine: Never
+AllowShortLoopsOnASingleLine: false
+AllowShortBlocksOnASingleLine: Never
+# Evita errores de "goto fail": toda rama lleva llaves.
+InsertBraces: true
+IndentCaseLabels: false
+AlignTrailingComments: true
+AlignConsecutiveMacros: Consecutive
+SpaceAfterCStyleCast: false
+KeepEmptyLines:
+  AtStartOfBlock: false
+...

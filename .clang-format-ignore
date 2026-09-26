@@ -1,0 +1,3 @@
+subprojects/**
+build*/**
+third_party/**
