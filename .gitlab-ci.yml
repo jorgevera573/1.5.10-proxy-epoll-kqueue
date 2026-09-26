@@ -6,18 +6,13 @@
 # de su configuración). macOS no se cubre aquí: los runners macOS de GitLab
 # no están disponibles en todos los planes. Ver .github/workflows/ci.yml.
 #
-# Fijaciones:
-#   - excepción de bootstrap: ca-certificates y sus dependencias se instalan
-#     primero desde los repositorios normales para habilitar HTTPS;
-#   - imagen ubuntu:24.04 por digest (índice multi-arquitectura);
-#   - paquetes apt desde snapshot.ubuntu.com en una fecha fija
-#     (APT_SNAPSHOT), por lo que las versiones de gcc/clang/valgrind/cppcheck
-#     no cambian entre ejecuciones;
-#   - meson, ninja, clang-format y clang-tidy por versión exacta
-#     (ci/requirements.txt);
-#   - cmocka 1.1.8 por SHA-256 (subprojects/cmocka.wrap).
-# Los scripts se invocan con `bash`: el repositorio se ha preparado con
-# core.filemode=false y no se garantiza el bit de ejecución.
+# Reproducibilidad:
+#   - imagen Ubuntu fijada por digest;
+#   - herramientas Python fijadas en ci/requirements.txt;
+#   - cmocka fijado por SHA-256;
+#   - paquetes APT desde repositorios normales de Ubuntu 24.04:
+#     pueden actualizarse; sus versiones se registran en cada trabajo.
+# Los scripts se invocan con bash.
 
 default:
   image: ubuntu:24.04@sha256:008173c23f95b170204355c12626cb5a965d779a7e1283b09e9cffbb1bf33ca3
@@ -27,14 +22,11 @@ default:
     # Bootstrap de certificados desde los repositorios normales.
     - apt-get update --error-on=any
     - apt-get install -y --no-install-recommends ca-certificates
-    - apt-get update --error-on=any --snapshot "$APT_SNAPSHOT"
-    - apt-get install -y --no-install-recommends --snapshot "$APT_SNAPSHOT"
+    - apt-get install -y --no-install-recommends
         ca-certificates gcc clang llvm python3 python3-venv pkg-config
         valgrind cppcheck xz-utils
+    - dpkg-query -W libc6 libc6-dev libc6-dbg gcc clang llvm python3 valgrind cppcheck ca-certificates
     - bash scripts/ci.sh tools
-
-variables:
-  APT_SNAPSHOT: "20260901T000000Z"
 
 stages:
   - build
