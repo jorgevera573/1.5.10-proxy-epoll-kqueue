@@ -3,8 +3,12 @@
 Estados:
 
 - **Verificado (Linux)**: pruebas automatizadas ejercitan todos los
-  criterios de aceptación de `docs/requirements.md` y pasan en Linux. No se
-  ha ejecutado nada en macOS; la portabilidad se sigue en R01/R02.
+  criterios de aceptación de `docs/requirements.md` y pasan en Linux.
+- **Verificado (Linux y macOS)**: además pasan en macOS en GitHub Actions
+  (ejecución 36279111225: macOS 15, arm64, Apple clang 17, kqueue). Solo se
+  ha reevaluado así R01–R04; las suites de R05–R15 también pasaron en esa
+  ejecución de macOS, pero esas filas no se han revisado una a una y
+  conservan "Verificado (Linux)".
 - **Parcial**: parte de los criterios tiene evidencia real; se indica qué
   falta.
 - **Pendiente**: sin código o sin evidencia.
@@ -25,10 +29,10 @@ hecho benchmarks.
 
 | ID | Requisito | Estado | Evidencia | Falta |
 |----|-----------|--------|-----------|-------|
-| R01 | Build Meson y selección epoll/kqueue | **Parcial** | Linux: GCC, Clang, release, ASan/UBSan, TSan y cmocka del wrap, 0 avisos con `-Werror`; `auto` → epoll. Pasos de CI simulados en local con herramientas fijadas. **macOS (GitHub Actions, ejecución 36250381456, commit 1e45556a)**: compila con Clang y kqueue; 14/18 suites, 7 pruebas fallidas en 4 suites (causas y correcciones en § Portabilidad macOS). | Nueva ejecución en macOS con las correcciones (no ejecutada). |
-| R02 | API común `io_loop_*` | **Parcial** | 18 pruebas de `io_event` (epoll); el proxy y el hilo de health usan la API. kqueue en macOS (ejecución 36250381456): 17/18; la fallida era un supuesto de la prueba (eventos de dos fds mezclados), corregida y con mutación del filtrado detectada en Linux. | Nueva ejecución en macOS con kqueue (no ejecutada). |
-| R03 | Sockets no bloqueantes y edge-triggered | **Parcial** | Fragmentación byte a byte, cliente lento de 40 MB con memoria acotada, escrituras parciales, desconexiones; mutación de pérdida de progreso detectada (etapa 3). En macOS (ejecución 36250381456) la suite de integración de un worker pasó salvo el timeout de conexión (supuesto de la prueba, corregido). | Nueva ejecución en macOS (no ejecutada). |
-| R04 | Frontends con `SO_REUSEPORT` y workers configurables | **Verificado (Linux)** | `workers` 1..64 y `0` = uno por CPU (probado: 18 workers en esta máquina). Cada worker abre su listener por frontend con `SO_REUSEPORT`; más de un worker atiende tráfico (observado por estadísticas, sin suponer reparto uniforme); routing correcto en los dos frontends con 2 workers; puerto ocupado → arranque fallido con código 1 y sin hijos. **Modelo de escucha por plataforma**: en macOS `SO_REUSEPORT` no reparte (ejecución 36250381456: un solo worker atendía); allí el maestro comparte un socket por frontend heredado por los workers. Ese modelo se prueba en Linux forzándolo con un gancho de `proxy-testhooks` (servicio dirigido a cada worker, límite por worker y arranque fallido, deterministas con SIGSTOP de workers propios). | macOS: nueva ejecución con el modelo compartido (no ejecutada). |
+| R01 | Build Meson y selección epoll/kqueue | **Verificado (Linux y macOS)** | Linux: GCC, Clang, release, ASan/UBSan, TSan y cmocka del wrap, 0 avisos con `-Werror`; `auto` → epoll. **GitHub Actions 36279111225** (commit `bc74bd3`): Linux GCC 13.3.0 y Clang 18.1.3 → epoll; macOS 15 arm64 Apple clang 17.0.0 → `Backend io_event seleccionado: kqueue`; en los tres, build normal y ASan/UBSan con 18/18 suites; los `testlog` de ASan de los tres y el normal de macOS registran 119 casos unitarios y 95 de integración (1 omitido en macOS: `test_limits`). La 36250381456 había fallado en macOS (7 pruebas, corregidas). | Una sola versión de macOS (15, arm64); sin x86_64. En macOS no hay Valgrind ni TSan y `test_limits` se omite. |
+| R02 | API común `io_loop_*` | **Verificado (Linux y macOS)** | 18 pruebas de `io_event` (registro, modificación, retirada, parada, eventos obsoletos, rearmado): Linux epoll (local y CI, también ASan, TSan y Valgrind en CI) y macOS kqueue (CI 36279111225, normal y ASan: 18/18). El fallo de la 36250381456 era un supuesto de la prueba (eventos de dos fds mezclados); corregido, con mutación del filtrado detectada en Linux. | — |
+| R03 | Sockets no bloqueantes y edge-triggered | **Verificado (Linux y macOS)** | Fragmentación byte a byte, cliente lento de 40 MB con memoria acotada, escrituras parciales, desconexiones; mutación de pérdida de progreso detectada (etapa 3). `integration` (38 casos) 38/38 en macOS en la 36279111225 (normal y ASan), incluido el timeout de conexión con la cola llenada por observación. | — |
+| R04 | Frontends con `SO_REUSEPORT` y workers configurables | **Verificado (Linux y macOS)** | `workers` 1..64 y `0` = uno por CPU. Linux: un listener por worker con `SO_REUSEPORT`; más de un worker atiende (observado por estadísticas); routing en dos frontends con 2 workers; puerto ocupado → código 1 sin hijos. **Modelo de escucha por plataforma**: en macOS `SO_REUSEPORT` no reparte (36250381456: un solo worker atendía); allí el maestro comparte un socket por frontend heredado por los workers. `integration-multiprocess` (32 casos) 32/32 en macOS en la 36279111225 (normal y ASan), incluidos servicio dirigido a cada worker, límite por worker y reposición deterministas. | Los logs de CI no registran el `listener_model` usado en macOS: que sea el compartido se deduce del código (fuera de Linux siempre lo es). |
 | R05 | Host y cabeceras de reenvío | **Verificado (Linux)** | El backend verifica Host y la política de X-Forwarded-For, X-Real-IP y X-Forwarded-Proto (confiable y no confiable). | — |
 | R06 | Exacto → wildcard → default → 502 | **Verificado (Linux)** | Unitarias de `router` e integración (incluido 502 sin default). | — |
 | R07 | round_robin, weighted, least_conn | **Verificado (Linux)** | Unitarias deterministas: secuencias exactas (RR; weighted 3:1 = A A B A, 5:1:1 = a a b a c a a; 300/100 en 400), least_conn con conexiones retenidas y empates rotatorios, exclusión por salud y `max_conns`, y contabilidad entre generaciones. Integración (1 worker): weighted 30/10; least_conn con retenidas; contadores liberados al cancelar (RST) y en cierre forzado; conservación tras recarga. **Multiproceso**: weighted 3:1 cumplido dentro de cada worker (±1); least_conn equilibrado dentro de cada worker (diferencia ≤ 1); `max_conns = 1` con 2 workers → el backend llega a 2 simultáneas y cada worker respeta la suya (alcance **por worker**, documentado). | Estado compartido entre workers (descartado en esta etapa; §14.2). |
@@ -194,6 +198,54 @@ integración 15/15, unitarias 24/24.
   Python 3.14.4, curl 8.18.0.
 - Fecha: 2026-09-25.
 
+### GitHub Actions, ejecución 36279111225 (commit `bc74bd3`): correcta
+
+<https://github.com/jorgevera573/1.5.10-proxy-epoll-kqueue/actions/runs/36279111225>,
+2026-09-26, evento `push`. Datos tomados de los logs de los cuatro jobs y de
+los artefactos `meson-logs-*` (`testlog*.json`). Es una ejecución de GitHub;
+nada de esto es evidencia del pipeline de GitLab. El mismo commit pasó
+también en GitLab (pipeline #3383, resultado global Passed según captura
+aportada por el usuario; sin detalle por job consultado).
+
+| Job | Entorno | Pasos | Resultado |
+|---|---|---|---|
+| `build-test (ubuntu-24.04, gcc)` | Linux 6.17 x86_64, GCC 13.3.0, Valgrind 3.22.0, epoll | build y pruebas; ASan/UBSan; Valgrind (TSan: no aplica, solo Clang) | build 18/18; ASan 18/18; Valgrind: unitarias 11/11 e integración 7/7 |
+| `build-test (ubuntu-24.04, clang)` | Linux 6.17 x86_64, Clang 18.1.3, Valgrind 3.22.0, epoll | build y pruebas; ASan/UBSan; TSan; Valgrind | build 18/18; ASan 18/18; TSan 18/18; Valgrind: unitarias 11/11 e integración 7/7 |
+| `build-test (macos-15, clang)` | Darwin 24.6.0 arm64, Apple clang 17.0.0, kqueue | build y pruebas; ASan/UBSan (TSan y Valgrind: solo Linux, omitidos por diseño) | build 18/18; ASan 18/18 |
+| `lint` | Ubuntu 24.04 | clang-format 21.1.8, clang-tidy 21.1.6, Cppcheck 2.13.0 | `format-check: OK`, `tidy: OK (31 ficheros)`, `cppcheck: OK` |
+
+Casos por suite (iguales en todos los builds con suites completas): unitarias
+119 en 11 suites (buffer_pool 7, timer 10, http_parser 34, router 11,
+config 8, backend_pool 14, ipc 4, stats 2, io_event 18, log 6, health 5);
+integración 95 en 7 ficheros (integration 38, balancing 4, health 4,
+reload 7, limits 1, generations 9, multiprocess 32).
+
+Pruebas omitidas (según `testlog*.json`):
+
+| Dónde | Prueba | Motivo |
+|---|---|---|
+| macOS, build normal y ASan | `test_limits::test_accept_under_emfile_sheds_without_spinning_and_recovers` | `requiere /proc (Linux)`: la prueba de EMFILE **no se ejecuta en macOS** |
+| Linux (gcc y clang), paso Valgrind | la misma | `bajo Valgrind el límite de fds no es fiable` |
+
+En Linux sí se ejecutó en ASan/UBSan (gcc y clang) y en TSan (clang): esos
+`testlog.json` la registran como ejecutada, sin omisión. Del build normal
+de Linux solo queda el resumen del log del job (`integration-limits OK
+1.35s`), porque el paso Valgrind reutiliza el directorio `build` y
+sobrescribe `testlog.json` con su ejecución de integración.
+
+Alcance de esta evidencia:
+
+- En el paso Valgrind de integración, Valgrind envuelve al proxy y a sus
+  workers (`--error-exitcode=99`: un error hace fallar la prueba), pero los
+  logs de los procesos solo se conservan si la prueba falla: no hay auditoría
+  por proceso de esta ejecución, y los procesos terminados con SIGKILL no
+  emiten resumen.
+- Cppcheck en CI es 2.13.0 (Ubuntu 24.04); en local, 2.19.0.
+- Una ejecución correcta no demuestra que los pendientes conocidos hayan
+  desaparecido: la carrera de SIGTERM en el arranque fallido (depende del
+  orden de ejecución), la aceptación de zonas en `config.c` (no la ejercita
+  ninguna prueba) y `test_limits` en macOS (omitida) siguen pendientes.
+
 ### Portabilidad macOS (GitHub Actions, ejecución 36250381456)
 
 Ejecución real del workflow en el commit `1e45556a`: `build-test (macos-15,
@@ -260,8 +312,8 @@ hilos.
 
 Pendiente:
 
-- **macOS no está verificado**: hay que volver a ejecutar el workflow con
-  estas correcciones. Hasta entonces R01–R04 siguen parciales en macOS.
+- Resuelto después: la ejecución 36279111225 (sección anterior) pasó los
+  cuatro jobs, incluido macOS.
 - `config.c` (`parse_ip`) también valida direcciones de la configuración con
   `inet_pton`: en macOS aceptaría una zona en `listen`/`address` y la
   descartaría en silencio. Fuera del alcance de esta corrección.
@@ -585,8 +637,8 @@ bash scripts/ci.sh lint <scratch>/ci-lint4                    # format, tidy (24
 
 | Pipeline | Estado |
 |---|---|
-| `.github/workflows/ci.yml` (Linux y macOS; tsan y valgrind solo Linux) | **Ejecutado** en remoto: ejecución 36250381456 (commit `1e45556a`). `build-test (ubuntu-24.04, gcc)` y `(ubuntu-24.04, clang)`: correctos; `build-test (macos-15, clang)`: 14/18 suites (§ Portabilidad macOS); `lint`: falló en la instalación de paquetes. Las correcciones posteriores (portabilidad, `procps`, instalación de paquetes) **no se han ejecutado todavía** en remoto. |
-| `.gitlab-ci.yml` (Linux: gcc, clang, sanitizers, valgrind, tsan, lint) | Sin evidencia registrada aquí: el proyecto de GitLab es privado y no se puede consultar desde este entorno. |
+| `.github/workflows/ci.yml` (Linux y macOS; tsan y valgrind solo Linux) | **Correcto** en la ejecución 36279111225 (commit `bc74bd3`): los cuatro jobs pasaron (§ GitHub Actions, ejecución 36279111225). Antes, la 36250381456 (commit `1e45556a`) falló en macOS (14/18) y en `lint` (instalación de paquetes). |
+| `.gitlab-ci.yml` (Linux: gcc, clang, sanitizers, valgrind, tsan, lint) | **Passed** (resultado global) en el pipeline #3383, commit `bc74bd3`, según captura aportada por el usuario. No se han consultado sus jobs, logs ni artefactos (el proyecto es privado y no es accesible desde este entorno): no se registran cifras de pruebas ni resultados por job. |
 
 ### Etapas anteriores (referencia)
 
@@ -595,12 +647,16 @@ Etapa 1: `--repeat=50` de `io_event` y 6 mutaciones. Etapa 2: 7 mutaciones
 
 ### No verificado
 
-- macOS/kqueue: compilado y ejecutado una vez en GitHub Actions (ejecución
-  36250381456) con 7 pruebas fallidas; corregidas en Linux y **pendiente**
-  una nueva ejecución en macOS.
-- CI remota: GitHub Actions se ejecutó una vez (36250381456, commit
-  `1e45556a`); los cambios posteriores están sin ejecutar allí. Para GitLab
-  no hay evidencia registrada en este documento.
+- macOS: solo macOS 15 arm64 en GitHub Actions; sin Valgrind ni TSan allí,
+  `test_limits` (EMFILE) omitida por requerir /proc, y ninguna versión
+  x86_64 ni local.
+- Carrera de SIGTERM en el arranque fallido (modelo por worker): sin
+  corregir; la ejecución verde no la descarta (depende del orden).
+- `config.c` (`parse_ip`) acepta en macOS una zona en `listen`/`address`
+  (vía `inet_pton`) y la descarta: sin corregir y sin prueba.
+- GitLab: solo consta el resultado global del pipeline #3383 (Passed,
+  commit `bc74bd3`, por captura); no se han revisado sus jobs ni sus logs,
+  así que no aporta cifras ni pruebas omitidas.
 - TSan no demuestra ausencia de carreras en caminos no ejercitados ni cubre
   el protocolo entre procesos.
 - Combinaciones de retirada sin prueba dirigida: worker en retirada cuando

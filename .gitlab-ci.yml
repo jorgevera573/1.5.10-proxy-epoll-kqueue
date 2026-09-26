@@ -1,7 +1,8 @@
 # GitLab CI — Linux.
 #
-# ESTADO: preparado, NO ejecutado. No se ha lanzado ningún pipeline remoto;
-# ver docs/verification.md. Requiere un runner Linux con el executor docker
+# ESTADO: pipeline #3383 (commit bc74bd3) con resultado global Passed
+# (según captura aportada; no se han consultado sus jobs ni cifras de
+# pruebas). Ver docs/verification.md. Requiere un runner Linux con el executor docker
 # (en GitLab.com, los runners compartidos; en una instancia propia, depende
 # de su configuración). macOS no se cubre aquí: los runners macOS de GitLab
 # no están disponibles en todos los planes. Ver .github/workflows/ci.yml.

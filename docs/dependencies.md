@@ -32,7 +32,7 @@ estándar (sin paquetes de PyPI).
 | Elemento | Fijación | Dónde |
 |---|---|---|
 | Imagen GitLab | `ubuntu:24.04@sha256:008173c23f95b170204355c12626cb5a965d779a7e1283b09e9cffbb1bf33ca3` (índice multi-arquitectura consultado en Docker Hub el 2026-09-24) | `.gitlab-ci.yml` |
-| Paquetes apt en GitLab | snapshot `20260901T000000Z` de snapshot.ubuntu.com | `.gitlab-ci.yml` (`APT_SNAPSHOT`) |
+| Paquetes apt en GitLab | sin fijar: repositorios normales de Ubuntu 24.04; versiones registradas con `dpkg-query` en cada job | `.gitlab-ci.yml` (`before_script`) |
 | meson | 1.10.1 | `ci/requirements.txt` |
 | ninja | 1.13.2 | `ci/requirements.txt` |
 | clang-format | 21.1.8 (igual que la local) | `ci/requirements.txt` |
@@ -53,14 +53,21 @@ Docker Hub; las versiones de PyPI, de su API JSON.
   verificado). En macOS se usa el Apple Clang de la imagen `macos-15`. Las
   versiones se registran en el log del job.
 - **pip** instala por versión exacta, pero sin `--require-hashes`.
-- **apt `--snapshot`** en GitLab no se ha probado todavía en un runner real.
+- **apt en GitLab**: los paquetes vienen de los repositorios normales de
+  Ubuntu 24.04 (ya no de un snapshot), así que pueden cambiar entre
+  ejecuciones; sus versiones quedan en el log de cada job.
 
 ## Estado
 
-GitHub Actions se ejecutó en remoto (ejecución 36250381456, commit
-`1e45556a`; resultados en `docs/verification.md`); los cambios posteriores
-aún no se han ejecutado allí. Del pipeline de GitLab no hay evidencia
-registrada en este repositorio. Localmente se simularon los pasos de ambos
+GitHub Actions: la ejecución 36279111225 (commit `bc74bd3`) pasó los cuatro
+jobs (Linux GCC, Linux Clang, macOS Clang y lint); la anterior, 36250381456
+(commit `1e45556a`), falló en macOS. Versiones registradas en esa ejecución:
+GCC 13.3.0, Clang 18.1.3, Valgrind 3.22.0 y Cppcheck 2.13.0 (Ubuntu 24.04);
+Apple clang 17.0.0 (macOS 15, arm64); clang-format 21.1.8, clang-tidy 21.1.6,
+Meson 1.10.1 y Ninja 1.13.2 (pip). Resultados en `docs/verification.md`.
+GitLab: pipeline #3383 (commit `bc74bd3`) con resultado global Passed,
+según captura aportada por el usuario; no se han consultado sus jobs ni sus
+versiones registradas. Localmente se simularon los pasos de ambos
 con las herramientas fijadas (ver `docs/verification.md`, sección CI).
 Los jobs de Linux instalan `procps` de forma explícita: las pruebas de
 integración usan `ps` para identificar los workers de cada maestro.

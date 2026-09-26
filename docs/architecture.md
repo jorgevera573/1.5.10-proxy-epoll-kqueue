@@ -45,7 +45,7 @@ han hecho benchmarks.
 
 | Módulo | Responsabilidad | Hilo/proceso | Estado |
 |---|---|---|---|
-| `io_event` | API común `io_loop_*`; backends epoll y kqueue | event loop | **Implementado** (epoll verificado; kqueue sin compilar) |
+| `io_event` | API común `io_loop_*`; backends epoll y kqueue | event loop | **Implementado** (epoll: Linux, local y CI; kqueue: macOS 15 en CI, ejecución 36279111225) |
 | `timer` | Min-heap de temporizadores; próximo vencimiento como timeout del bucle | event loop | **Implementado** |
 | `buffer_pool` | Arena `mmap` de slots de 16 KB con freelist fuera de banda | event loop | **Implementado** y usado por las conexiones |
 | `host` | Forma canónica de nombres de host | sin estado | **Implementado** |
@@ -671,8 +671,11 @@ usando esta contabilidad (vía el socket de estadísticas), no solo Valgrind.
   de integración); **ThreadSanitizer**; lint.
 - `proxy-testhooks`: variante de pruebas (ganchos como el retardo de
   recarga); solo la usan las pruebas de integración.
-- CI remota: GitHub Actions ejecutado una vez (ejecución 36250381456; macOS
-  con fallos, corregidos después y pendientes de una nueva ejecución); ver
+- CI remota: GitHub Actions. La ejecución 36279111225 (commit `bc74bd3`)
+  pasó los cuatro jobs (Linux GCC y Clang con ASan/UBSan y Valgrind, TSan
+  en Clang, macOS 15 Clang con ASan/UBSan, y lint); la 36250381456 había
+  fallado en macOS. GitLab: pipeline #3383 del mismo commit con resultado
+  global Passed (por captura; sin detalle por job). Detalle en
   `docs/verification.md`.
 
 ## 13. Limitaciones conocidas
@@ -721,8 +724,10 @@ usando esta contabilidad (vía el socket de estadísticas), no solo Valgrind.
 - Sin TLS, HTTP/2 ni WebSocket (rechazados explícitamente).
 - 1xx informativas del upstream descartadas.
 - Direcciones solo como IP literal.
-- macOS/kqueue: una ejecución en GitHub Actions con fallos, corregidos en
-  Linux; macOS no verificado hasta una nueva ejecución satisfactoria.
+- macOS/kqueue: verificado solo en GitHub Actions (macOS 15, arm64, Apple
+  clang 17; ejecución 36279111225), sin Valgrind ni TSan allí y con
+  `test_limits` omitida (requiere /proc). Otras versiones o x86_64 no se han
+  probado.
 - Valgrind y ASan no ven la arena `mmap` de `buffer_pool`; su uso se
   comprueba con la contabilidad propia de slots.
 - La prueba de EMFILE se omite bajo Valgrind.

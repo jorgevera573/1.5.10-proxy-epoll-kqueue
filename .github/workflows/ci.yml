@@ -1,8 +1,11 @@
 # GitHub Actions — Linux y macOS.
 #
-# ESTADO: primera ejecución realizada, con fallos pendientes de corregir.
-# macOS pendiente de verificación satisfactoria.
-# Evidencias y alcance en docs/verification.md.
+# ESTADO: ejecución 36279111225 (commit bc74bd3) con los cuatro jobs
+# correctos: build-test ubuntu-24.04 gcc y clang, build-test macos-15 clang
+# y lint. La ejecución anterior (36250381456) falló en macOS. Una ejecución
+# verde no cubre lo que no se ejecuta aquí (p. ej. test_limits se omite en
+# macOS). El mismo commit pasó también en GitLab (pipeline #3383, Linux).
+# Evidencias, pruebas omitidas y pendientes en docs/verification.md.
 #
 # Fijaciones: acciones por SHA de commit (con la etiqueta en comentario),
 # runners por etiqueta de versión (no *-latest), herramientas Python por
