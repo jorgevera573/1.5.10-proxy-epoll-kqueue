@@ -250,7 +250,7 @@ class GenerationsTest(unittest.TestCase):
         pools = {"a": ("round_robin", [(self.A.port, 0)]), "b": ("round_robin", [(self.B.port, 0)])}
         self.start(config(self.fe, pools, {"api.test": "a"}), testhooks=True,
                    env={"PROXY_TEST_RELOAD_DELAY_MS": str(int(delay * 1000))})
-        self.assertIn("VARIANTE DE PRUEBAS", self.proxy.output())
+        self.proxy.wait_for(r"VARIANTE DE PRUEBAS", scaled(5))
         self.proxy.write_config(config(self.fe, pools, {"api.test": "b"}))
         start = len(self.proxy.output())
         t0 = time.monotonic()

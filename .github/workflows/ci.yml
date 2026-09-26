@@ -82,11 +82,12 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends \
+            gcc clang libclang-rt-18-dev python3-venv pkg-config valgrind
             clang python3-venv pkg-config cppcheck
           cppcheck --version
       - name: Herramientas fijadas
         run: bash scripts/ci.sh tools
       - name: format-check, clang-tidy y cppcheck
         run: |
-          CC=clang .venv/bin/meson setup build-lint --force-fallback-for=cmocka
+          PATH="$PWD/.venv/bin:$PATH" CC=clang .venv/bin/meson setup build-lint --force-fallback-for=cmocka
           bash scripts/ci.sh lint build-lint
