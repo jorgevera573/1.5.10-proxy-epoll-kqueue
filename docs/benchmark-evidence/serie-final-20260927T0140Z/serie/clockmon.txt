@@ -1,0 +1,7 @@
+2026-09-27T01:41:08.247898Z BACKWARD d_realtime_us=-1005 d_monotonic_us=1092 realtime_minus_monotonic_us=-2097
+2026-09-27T01:41:38.249134Z BACKWARD d_realtime_us=-800 d_monotonic_us=1109 realtime_minus_monotonic_us=-1910
+2026-09-27T01:42:08.251642Z BACKWARD d_realtime_us=-700 d_monotonic_us=1129 realtime_minus_monotonic_us=-1830
+2026-09-27T01:42:38.253095Z BACKWARD d_realtime_us=-537 d_monotonic_us=1102 realtime_minus_monotonic_us=-1640
+2026-09-27T01:43:08.253464Z BACKWARD d_realtime_us=-718 d_monotonic_us=1071 realtime_minus_monotonic_us=-1790
+2026-09-27T01:43:38.254427Z BACKWARD d_realtime_us=-906 d_monotonic_us=1142 realtime_minus_monotonic_us=-2049
+2026-09-27T01:43:38.287962Z SUMMARY seconds=170.0 samples=155423 events=6 backward=6 drift_realtime_minus_monotonic_us=-11317 max_sample_gap_us=8126

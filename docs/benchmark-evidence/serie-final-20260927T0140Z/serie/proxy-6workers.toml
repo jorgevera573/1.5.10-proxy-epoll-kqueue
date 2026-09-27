@@ -1,0 +1,24 @@
+[server]
+workers = 6
+max_connections = 1024
+shutdown_timeout_ms = 10000
+
+[limits]
+max_requests_per_connection = 1000000
+
+[[frontend]]
+listen = "127.0.0.1:18081"
+
+[[pool]]
+name = "bench"
+algorithm = "round_robin"
+
+[[pool.backend]]
+address = "127.0.0.1:18080"
+
+[routing]
+default_pool = "bench"
+
+[stats]
+socket = "/tmp/pbf.WSNpxD/stats.sock"
+mode = 0o600

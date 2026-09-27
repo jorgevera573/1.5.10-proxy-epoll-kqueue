@@ -1,0 +1,48 @@
+2026-09-27T02:08:59.510Z pid=513204 role=master level=INFO gen=- modelo de escucha: per_worker_reuseport
+2026-09-27T02:08:59.510Z pid=513204 role=master level=INFO gen=- estadísticas en /tmp/pbc.W4XKOt/stats.sock (modo 600)
+2026-09-27T02:08:59.510Z pid=513204 role=master level=INFO gen=1 maestro pid 513204: arrancando 6 workers
+2026-09-27T02:08:59.510Z pid=513204 role=master level=INFO gen=1 worker 0 arrancado (pid 513208, generación 1)
+2026-09-27T02:08:59.510Z pid=513204 role=master level=INFO gen=1 worker 1 arrancado (pid 513209, generación 1)
+2026-09-27T02:08:59.510Z pid=513204 role=master level=INFO gen=1 worker 2 arrancado (pid 513211, generación 1)
+2026-09-27T02:08:59.510Z pid=513208 worker=0 level=INFO gen=- escuchando en 127.0.0.1:18081 (socket propio con SO_REUSEPORT)
+2026-09-27T02:08:59.510Z pid=513204 role=master level=INFO gen=1 worker 3 arrancado (pid 513212, generación 1)
+2026-09-27T02:08:59.510Z pid=513204 role=master level=INFO gen=1 worker 4 arrancado (pid 513216, generación 1)
+2026-09-27T02:08:59.510Z pid=513211 worker=2 level=INFO gen=- escuchando en 127.0.0.1:18081 (socket propio con SO_REUSEPORT)
+2026-09-27T02:08:59.510Z pid=513208 worker=0 level=INFO gen=1 worker 0 listo (pid 513208, generación 1)
+2026-09-27T02:08:59.511Z pid=513212 worker=3 level=INFO gen=- escuchando en 127.0.0.1:18081 (socket propio con SO_REUSEPORT)
+2026-09-27T02:08:59.511Z pid=513209 worker=1 level=INFO gen=- escuchando en 127.0.0.1:18081 (socket propio con SO_REUSEPORT)
+2026-09-27T02:08:59.511Z pid=513204 role=master level=INFO gen=1 worker 5 arrancado (pid 513219, generación 1)
+2026-09-27T02:08:59.511Z pid=513211 worker=2 level=INFO gen=1 worker 2 listo (pid 513211, generación 1)
+2026-09-27T02:08:59.511Z pid=513212 worker=3 level=INFO gen=1 worker 3 listo (pid 513212, generación 1)
+2026-09-27T02:08:59.511Z pid=513209 worker=1 level=INFO gen=1 worker 1 listo (pid 513209, generación 1)
+2026-09-27T02:08:59.511Z pid=513219 worker=5 level=INFO gen=- escuchando en 127.0.0.1:18081 (socket propio con SO_REUSEPORT)
+2026-09-27T02:08:59.511Z pid=513216 worker=4 level=INFO gen=- escuchando en 127.0.0.1:18081 (socket propio con SO_REUSEPORT)
+2026-09-27T02:08:59.511Z pid=513219 worker=5 level=INFO gen=1 worker 5 listo (pid 513219, generación 1)
+2026-09-27T02:08:59.511Z pid=513216 worker=4 level=INFO gen=1 worker 4 listo (pid 513216, generación 1)
+2026-09-27T02:08:59.511Z pid=513204 role=master level=INFO gen=1 proxy: listo (pid 513204, 6 workers, generación 1)
+2026-09-27T02:13:19.793Z pid=513204 role=master level=INFO gen=1 cierre ordenado del maestro (6 workers, plazo 10000 ms)
+2026-09-27T02:13:19.793Z pid=513208 worker=0 level=INFO gen=- cierre ordenado (0 conexiones activas, plazo 10000 ms)
+2026-09-27T02:13:19.793Z pid=513216 worker=4 level=INFO gen=- cierre ordenado (0 conexiones activas, plazo 10000 ms)
+2026-09-27T02:13:19.793Z pid=513212 worker=3 level=INFO gen=- cierre ordenado (0 conexiones activas, plazo 10000 ms)
+2026-09-27T02:13:19.793Z pid=513219 worker=5 level=INFO gen=- cierre ordenado (0 conexiones activas, plazo 10000 ms)
+2026-09-27T02:13:19.793Z pid=513209 worker=1 level=INFO gen=- cierre ordenado (0 conexiones activas, plazo 10000 ms)
+2026-09-27T02:13:19.793Z pid=513209 worker=1 level=INFO gen=- shutdown conns=0 upstreams=0 slots_in_use=0 slots_total=4096 backend_active=0 generations_live=1 backends_live=1
+2026-09-27T02:13:19.793Z pid=513208 worker=0 level=INFO gen=- shutdown conns=0 upstreams=0 slots_in_use=0 slots_total=4096 backend_active=0 generations_live=1 backends_live=1
+2026-09-27T02:13:19.793Z pid=513211 worker=2 level=INFO gen=- cierre ordenado (0 conexiones activas, plazo 10000 ms)
+2026-09-27T02:13:19.793Z pid=513208 worker=0 level=INFO gen=- shutdown final generations_live=0 backends_live=0
+2026-09-27T02:13:19.793Z pid=513209 worker=1 level=INFO gen=- shutdown final generations_live=0 backends_live=0
+2026-09-27T02:13:19.793Z pid=513216 worker=4 level=INFO gen=- shutdown conns=0 upstreams=0 slots_in_use=0 slots_total=4096 backend_active=0 generations_live=1 backends_live=1
+2026-09-27T02:13:19.793Z pid=513216 worker=4 level=INFO gen=- shutdown final generations_live=0 backends_live=0
+2026-09-27T02:13:19.793Z pid=513212 worker=3 level=INFO gen=- shutdown conns=0 upstreams=0 slots_in_use=0 slots_total=4096 backend_active=0 generations_live=1 backends_live=1
+2026-09-27T02:13:19.793Z pid=513212 worker=3 level=INFO gen=- shutdown final generations_live=0 backends_live=0
+2026-09-27T02:13:19.793Z pid=513219 worker=5 level=INFO gen=- shutdown conns=0 upstreams=0 slots_in_use=0 slots_total=4096 backend_active=0 generations_live=1 backends_live=1
+2026-09-27T02:13:19.793Z pid=513219 worker=5 level=INFO gen=- shutdown final generations_live=0 backends_live=0
+2026-09-27T02:13:19.793Z pid=513211 worker=2 level=INFO gen=- shutdown conns=0 upstreams=0 slots_in_use=0 slots_total=4096 backend_active=0 generations_live=1 backends_live=1
+2026-09-27T02:13:19.793Z pid=513211 worker=2 level=INFO gen=- shutdown final generations_live=0 backends_live=0
+2026-09-27T02:13:19.794Z pid=513204 role=master level=INFO gen=1 worker 0 (pid 513208) terminó (código 0)
+2026-09-27T02:13:19.794Z pid=513204 role=master level=INFO gen=1 worker 1 (pid 513209) terminó (código 0)
+2026-09-27T02:13:19.794Z pid=513204 role=master level=INFO gen=1 worker 3 (pid 513212) terminó (código 0)
+2026-09-27T02:13:19.794Z pid=513204 role=master level=INFO gen=1 worker 4 (pid 513216) terminó (código 0)
+2026-09-27T02:13:19.794Z pid=513204 role=master level=INFO gen=1 worker 5 (pid 513219) terminó (código 0)
+2026-09-27T02:13:19.794Z pid=513204 role=master level=INFO gen=1 worker 2 (pid 513211) terminó (código 0)
+2026-09-27T02:13:19.794Z pid=513204 role=master level=INFO gen=- maestro: fin (código 0)

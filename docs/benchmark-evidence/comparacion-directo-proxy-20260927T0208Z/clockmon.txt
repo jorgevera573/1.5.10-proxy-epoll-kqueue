@@ -1,0 +1,10 @@
+2026-09-27T02:09:08.300344Z BACKWARD d_realtime_us=-1043 d_monotonic_us=1107 realtime_minus_monotonic_us=-2150
+2026-09-27T02:09:38.302094Z BACKWARD d_realtime_us=-379 d_monotonic_us=1069 realtime_minus_monotonic_us=-1448
+2026-09-27T02:10:08.303694Z BACKWARD d_realtime_us=-710 d_monotonic_us=1255 realtime_minus_monotonic_us=-1966
+2026-09-27T02:10:38.304347Z BACKWARD d_realtime_us=-617 d_monotonic_us=1092 realtime_minus_monotonic_us=-1710
+2026-09-27T02:11:08.304020Z BACKWARD d_realtime_us=-814 d_monotonic_us=1090 realtime_minus_monotonic_us=-1905
+2026-09-27T02:11:38.306605Z BACKWARD d_realtime_us=-162 d_monotonic_us=1071 realtime_minus_monotonic_us=-1234
+2026-09-27T02:12:08.306334Z BACKWARD d_realtime_us=-1000 d_monotonic_us=1089 realtime_minus_monotonic_us=-2090
+2026-09-27T02:12:38.307858Z BACKWARD d_realtime_us=-499 d_monotonic_us=1067 realtime_minus_monotonic_us=-1566
+2026-09-27T02:13:08.308840Z BACKWARD d_realtime_us=-656 d_monotonic_us=1176 realtime_minus_monotonic_us=-1833
+2026-09-27T02:13:19.783867Z SUMMARY seconds=260.0 samples=238573 events=9 backward=9 drift_realtime_minus_monotonic_us=-15907 max_sample_gap_us=10781

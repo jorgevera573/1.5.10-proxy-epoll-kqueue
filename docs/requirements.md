@@ -2,8 +2,10 @@
 
 ## Alcance
 Proxy inverso HTTP L7 en C11 para Linux y macOS.
-README.md es la base del enunciado.
-Las cifras de rendimiento y número de tests allí indicados son
+La base del enunciado es el README.md original, del commit 0fc621f
+(`git show 0fc621f:README.md`); el README.md actual describe la
+implementación.
+Las cifras de rendimiento y número de tests del enunciado son
 referencias: requieren verificación propia.
 
 ## Requisitos funcionales

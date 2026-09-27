@@ -1,0 +1,35 @@
+buildtype          = release
+debug              = False
+optimization       = 3
+warning_level      = 3
+werror             = True
+b_staticpic        = True
+b_pie              = False
+b_lto              = False
+b_ndebug           = if-release
+b_coverage         = False
+b_sanitize         = ['none']
+b_pgo              = off
+c_std              = c11
+prefix             = /usr/local
+io_backend         = auto
+tests              = disabled
+integration_tests  = disabled
+--- flags reales de compilación (main.c del ejecutable proxy):
+cc -Isrc/proxy.p -Isrc -I../src -Ithird_party/tomlc99 -I../third_party/tomlc99 -fdiagnostics-color=always -DNDEBUG -D_FILE_OFFSET_BITS=64 -Wall -Winvalid-pch -Wextra -Wpedantic -Werror -std=c11 -O3 -Wshadow -Wconversion -Wsign-conversion -Wstrict-prototypes -Wmissing-prototypes -Wold-style-definition -Wpointer-arith -Wcast-align -Wcast-qual -Wwrite-strings -Wformat=2 -Wundef -Wvla -Wswitch-enum -Wnull-dereference -Wdouble-promotion -D_POSIX_C_SOURCE=200809L -D_DEFAULT_SOURCE -pthread -MD -MQ src/proxy.p/main.c.o -MF src/proxy.p/main.c.o.d -o src/proxy.p/main.c.o -c ../src/main.c
+--- binario:
+-rwxrwxrwx 1 atsperu atsperu 204232 Sep 26 19:47 build-bench-release/src/proxy
+build-bench-release/src/proxy: ELF 64-bit LSB pie executable, x86-64, version 1 (SYSV), dynamically linked, interpreter /lib64/ld-linux-x86-64.so.2, BuildID[sha1]=cb8fd6ce1fb833f22805db8c6091a9d4f58ae9f9, for GNU/Linux 3.2.0, not stripped
+0
+Build started at 2026-09-26T19:47:14.974161
+Main binary: /usr/bin/python3
+Build Options: -Db_sanitize=none -Dtests=disabled -Dintegration_tests=disabled -Dbuildtype=release
+Build started at 2026-09-26T19:47:14.974161
+Build type: native build
+Message: Backend io_event seleccionado: epoll
+e52c46857c288676ed0b2bb6d5c018038e4ee84b
+e52c468 2026-09-26 19:07:21 -0500 docs: align README with implementation and verified CI results
+cambios de src entre la compilación y HEAD:
+ninja -n (dry run):
+ninja: Entering directory `build-bench-release'
+ninja: no work to do.

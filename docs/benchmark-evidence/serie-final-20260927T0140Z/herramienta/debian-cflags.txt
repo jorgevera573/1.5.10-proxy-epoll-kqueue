@@ -1,0 +1,1 @@
+-g -O2 -Werror=implicit-function-declaration -fno-omit-frame-pointer -mno-omit-leaf-frame-pointer -ffile-prefix-map=/mnt/c/MASTER-ING-SOFTWARE/semana-06/1.5.10-proxy-epoll-kqueue=. -flto=auto -ffat-lto-objects -fstack-protector-strong -fstack-clash-protection -Wformat -Werror=format-security -fcf-protection

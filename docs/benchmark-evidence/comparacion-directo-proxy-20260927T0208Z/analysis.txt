@@ -1,0 +1,20 @@
+# Comparación directo/proxy: todas las ejecuciones, en orden
+ejecución        destino  req/s       completadas dur     media    p50      p75      p90      p99      máx      sock_err >399 saltos_reloj Δpeticiones_proxy Δ5xx Δ4xx Δfallos Δreinicios Δaceptadas
+warmup-directo   directo   321931.16     3220231 10.00s 305.44us        -        -        -        -   4.13ms        0    0      [-2150]            0     0    0      0      0        0
+warmup-proxy     proxy      88707.28      895908 10.10s   1.21ms        -        -        -        -  37.87ms        0    0           []       895999     0    0      0      0      101
+r1-1-directo     directo   274032.89     8221633 30.00s 380.51us 334.00us 437.00us 577.00us   1.39ms  14.29ms        0    0      [-1448]            0     0    0      0      0        0
+r1-2-proxy       proxy      84696.99     2541385 30.01s   1.18ms   1.12ms   1.38ms   1.76ms   2.49ms  41.84ms        0    0      [-1966]      2541477     0    0      0      0      101
+r2-1-proxy       proxy      87632.49     2629334 30.00s   1.14ms   1.08ms   1.35ms   1.63ms   2.36ms  29.39ms        0    0      [-1710]      2629419     0    0      0      0      101
+r2-2-directo     directo   272084.64     8163237 30.00s 372.30us 334.00us 411.00us 532.00us   1.15ms   5.39ms        0    0      [-1905]            0     0    0      0      0        0
+r3-1-directo     directo   266924.96     8008295 30.00s 381.96us 338.00us 415.00us 554.00us   1.23ms   6.24ms        0    0      [-1234]            0     0    0      0      0        0
+r3-2-proxy       proxy      83613.99     2509008 30.01s   1.20ms   1.13ms   1.42ms   1.70ms   2.35ms  14.95ms        0    0      [-2090]      2509092     0    0      0      0      101
+
+mediana directo  (3 × 30 s): req/s 272084.64 (rango 266924.96–274032.89); media 0.381 ms; p50 0.334 ms; p75 0.415 ms; p90 0.554 ms; p99 1.230 ms; máx 6.24 ms
+mediana proxy    (3 × 30 s): req/s 84696.99 (rango 83613.99–87632.49); media 1.180 ms; p50 1.120 ms; p75 1.380 ms; p90 1.700 ms; p99 2.360 ms; máx 29.39 ms
+relación proxy/directo (medianas): req/s 0.311 (31.1 %, directo 3.21× más); media 3.10×; p50 3.35×; p90 3.07×; p99 1.92×
+relación req/s proxy/directo por ronda: ronda 1: 0.309, ronda 2: 0.322, ronda 3: 0.313
+contabilidad warmup-proxy: el proxy contó 895999 peticiones y wrk 895908 completadas (diferencia 91, ≤ 100 en vuelo al cierre)
+contabilidad r1-2-proxy: el proxy contó 2541477 peticiones y wrk 2541385 completadas (diferencia 92, ≤ 100 en vuelo al cierre)
+contabilidad r2-1-proxy: el proxy contó 2629419 peticiones y wrk 2629334 completadas (diferencia 85, ≤ 100 en vuelo al cierre)
+contabilidad r3-2-proxy: el proxy contó 2509092 peticiones y wrk 2509008 completadas (diferencia 84, ≤ 100 en vuelo al cierre)
+Δaceptadas = 101 por ejecución contra el proxy: 100 conexiones de wrk + 1 conexión de prueba que wrk abre y cierra al resolver la dirección (wrk.lua:15, script.c:470-475).

@@ -1,0 +1,1 @@
+-Wl,-Bsymbolic-functions -flto=auto -ffat-lto-objects -Wl,-z,relro

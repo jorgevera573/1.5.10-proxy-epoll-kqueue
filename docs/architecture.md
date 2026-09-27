@@ -13,9 +13,11 @@ TOML, `round_robin`/`weighted`/`least_conn` (por worker), health checks
 activos (TCP/HTTP, en un hilo de cada worker) y pasivos, recarga con `SIGHUP`
 coordinada en dos fases con generaciones refcontadas, reenvío con
 backpressure, temporizadores, cierre ordenado coordinado, log asíncrono con
-ring buffer por worker y estadísticas JSON por socket UNIX. Las cifras del README (54.183 req/s, 22
-tests, etc.) son del enunciado, no mediciones de esta implementación; no se
-han hecho benchmarks.
+ring buffer por worker y estadísticas JSON por socket UNIX. Las cifras que
+traía el README original (54.183 req/s, 22 tests, etc.) eran del enunciado,
+no mediciones de esta implementación; la medición propia (mediana de
+81.974,62 req/s con 6 workers en una sola máquina WSL2 por loopback) y su
+alcance están en `docs/benchmark.md`.
 
 ---
 
@@ -731,7 +733,10 @@ usando esta contabilidad (vía el socket de estadísticas), no solo Valgrind.
 - Valgrind y ASan no ven la arena `mmap` de `buffer_pool`; su uso se
   comprueba con la contabilidad propia de slots.
 - La prueba de EMFILE se omite bajo Valgrind.
-- Ningún benchmark.
+- Rendimiento medido en un solo escenario (una máquina WSL2, loopback,
+  respuestas de 16 bytes, 6 workers): mediana de 84.696,99 req/s por el
+  proxy frente a 272.084,64 directo (relación 0,311), con una conexión TCP
+  al upstream por petición. Ver `docs/benchmark.md`.
 
 ## 14. Maestro, workers, IPC, log y estadísticas (implementado, etapa 5)
 

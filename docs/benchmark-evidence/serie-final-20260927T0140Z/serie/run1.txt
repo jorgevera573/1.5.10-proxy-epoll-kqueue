@@ -1,0 +1,17 @@
+# comando: /tmp/claude-1000/-mnt-c-MASTER-ING-SOFTWARE-semana-06-1-5-10-proxy-epoll-kqueue/3e52e86c-ca75-4a9c-b572-6fbb338d8e68/scratchpad/wrk-investigation/wrk-monotonic/wrk -t4 -c100 -d30s --timeout 2s --latency http://127.0.0.1:18081/bench
+# inicio: 2026-09-27T01:40:59.473693638Z
+Running 30s test @ http://127.0.0.1:18081/bench
+  4 threads and 100 connections
+  Thread Stats   Avg      Stdev     Max   +/- Stdev
+    Latency     1.25ms  729.50us  37.21ms   94.21%
+    Req/Sec    20.60k     2.41k   25.12k    79.00%
+  Latency Distribution
+     50%    1.13ms
+     75%    1.44ms
+     90%    1.76ms
+     99%    3.14ms
+  2459692 requests in 30.01s, 328.40MB read
+Requests/sec:  81974.62
+Transfer/sec:     10.94MB
+# código: 0
+# fin: 2026-09-27T01:41:29.486453178Z

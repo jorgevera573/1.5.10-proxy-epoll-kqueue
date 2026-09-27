@@ -4,9 +4,10 @@ Proxy inverso HTTP/1.x asíncrono en **C11**, sin frameworks, portable entre
 Linux (`epoll`) y macOS (`kqueue`): un maestro supervisa N procesos worker,
 cada uno con su event loop edge-triggered. Proyecto de sistemas del curso.
 
-**Objetivo de rendimiento: ≥ 50.000 req/s, pendiente de medir.** No se han
-ejecutado benchmarks; ninguna cifra de rendimiento de este repositorio está
-medida.
+**Rendimiento medido: mediana de 81.974,62 req/s** (3 × 30 s, 6 workers,
+commit `e52c468`) en una sola máquina WSL2 por loopback, con 100 conexiones
+y respuestas de 16 bytes. El objetivo de ≥ 50.000 req/s se alcanza en ese
+escenario; no se generaliza a otros ([docs/benchmark.md](docs/benchmark.md)).
 
 ## 🏗️ Arquitectura
 
@@ -158,6 +159,42 @@ bash scripts/demo.sh stop                                 # cierre ordenado; sol
 - **Omitidas**: la prueba de EMFILE (`test_limits`) en macOS (requiere `/proc`) y en el paso Valgrind de Linux.
 - Matriz de requisitos R01–R15 y registro completo: [docs/verification.md](docs/verification.md).
 
+## 📈 Rendimiento (commit `e52c468`)
+
+Build release, proxy con 6 workers delante de nginx (2 workers), 100
+conexiones keep-alive, 4 hilos de carga, respuesta de 16 bytes, todo en la
+misma máquina WSL2 (Intel Core Ultra 5 125H, 18 CPU lógicas) por loopback.
+**Serie final** (01:40 UTC): calentamiento de 10 s y tres mediciones de 30 s
+del proxy con `--timeout 2s`:
+
+| Serie final: medición | req/s | Media | p50 | p90 | p99 | Errores de socket | Estado > 399 |
+|---|---|---|---|---|---|---|---|
+| 1 | 81.974,62 | 1,25 ms | 1,13 ms | 1,76 ms | 3,14 ms | 0 | 0 |
+| 2 | 80.534,42 | 1,24 ms | 1,16 ms | 1,78 ms | 2,47 ms | 0 | 0 |
+| 3 | 83.881,57 | 1,19 ms | 1,12 ms | 1,72 ms | 2,40 ms | 0 | 0 |
+| **Mediana** | **81.974,62** | 1,24 ms | 1,13 ms | 1,76 ms | 2,47 ms | 0 | 0 |
+
+- **Generador**: `wrk-monotonic`, una variante de wrk 4.1.0-4build3 cuyo
+  único cambio es medir con `CLOCK_MONOTONIC`: en esta máquina el reloj de
+  pared retrocede ~2 ms cada 30 s y el wrk original lo contaba como
+  timeouts. Parche, fuente exacto, compilación y SHA-256 en
+  [docs/benchmark.md](docs/benchmark.md).
+- **Proxy durante la serie**: 0 respuestas 4xx/5xx propias, 0 fallos del
+  backend, 0 reinicios; cierre con código 0.
+- **Comparación directo/proxy** (serie aparte, 02:08 UTC, mismo montaje;
+  tres mediciones de 30 s por destino en rondas de orden alterno): mediana
+  de 272.084,64 req/s contra nginx directo y 84.696,99 req/s por el proxy,
+  **relación 0,311**; p50 0,334 ms frente a 1,12 ms. No es el coste aislado
+  del proxy: la máquina es compartida (sin medir el uso de CPU por
+  proceso), y la cifra del proxy incluye abrir una conexión TCP nueva con
+  nginx por petición, mientras que el acceso directo reutiliza 100
+  conexiones keep-alive.
+- **Alcance**: una máquina compartida por generador, proxy y backend, sin red
+  real y con respuestas mínimas; no es una capacidad máxima. El cuerpo solo
+  se comprobó con peticiones puntuales antes y después.
+- Evidencias en texto: [serie final](docs/benchmark-evidence/serie-final-20260927T0140Z/README.md)
+  y [comparación directo/proxy](docs/benchmark-evidence/comparacion-directo-proxy-20260927T0208Z/README.md).
+
 ## ⚠️ Límites conocidos
 
 - **Estado por worker**: `max_connections`, `max_conns`, cursores de balanceo,
@@ -170,7 +207,10 @@ bash scripts/demo.sh stop                                 # cierre ordenado; sol
   interrumpida, sin errores de memoria); `config.c` aceptaría en macOS un
   identificador de zona IPv6 en `listen`/`address`; `test_limits` omitida en
   macOS; combinaciones de retirada sin prueba dirigida.
-- **Sin benchmarks**: el objetivo de ≥ 50.000 req/s no está medido.
+- **Benchmark de alcance limitado**: dos series en una sola máquina WSL2 por
+  loopback, con respuestas de 16 bytes; sin pool de conexiones hacia el
+  upstream (una conexión TCP por petición). Detalle en
+  [docs/benchmark.md](docs/benchmark.md).
 
 Más: [docs/architecture.md §13](docs/architecture.md) y
 [docs/verification.md](docs/verification.md) (§ No verificado).

@@ -1,0 +1,8 @@
+2c2
+< pid nginx.pid;
+---
+> pid /tmp/pbc.W4XKOt/nginx.pid;
+23c23
+< socket = "/tmp/proxy-bench.QWIB56/stats.sock"
+---
+> socket = "/tmp/pbc.W4XKOt/stats.sock"

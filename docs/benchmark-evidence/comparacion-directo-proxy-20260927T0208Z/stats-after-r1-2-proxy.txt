@@ -1,0 +1,11 @@
+maestro pid=513204 uptime=82.0s generación=1 workers=6 recarga_en_curso=False reinicios=0
+recarga=idle recuperación=none(gen 0) listos=6/6 degradado=False
+completo=True sin_respuesta=[]
+  worker 0 pid=513208 estado=ready gen=1 conns=0 peticiones=623706 aceptadas=44 5xx=0 log_descartados=0
+  worker 1 pid=513209 estado=ready gen=1 conns=0 peticiones=545234 aceptadas=29 5xx=0 log_descartados=0
+  worker 2 pid=513211 estado=ready gen=1 conns=0 peticiones=560643 aceptadas=32 5xx=0 log_descartados=0
+  worker 3 pid=513212 estado=ready gen=1 conns=0 peticiones=557092 aceptadas=29 5xx=0 log_descartados=0
+  worker 4 pid=513216 estado=ready gen=1 conns=0 peticiones=597907 aceptadas=36 5xx=0 log_descartados=0
+  worker 5 pid=513219 estado=ready gen=1 conns=0 peticiones=552895 aceptadas=33 5xx=0 log_descartados=0
+totales: peticiones=3437477 conns=0 slots=0/24576 log_descartados=0
+  bench/127.0.0.1:18080 (round_robin) activas=0 elegido=3437477 fallos=0 salud=up {'up': 6, 'down-active': 0, 'down-passive': 0}

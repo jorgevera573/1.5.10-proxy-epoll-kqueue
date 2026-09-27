@@ -22,8 +22,11 @@ Se distinguen tres tipos de evidencia:
 - **Demostración ejecutada al preparar la documentación**: comandos de
   `docs/demo.md` con sus salidas reales.
 
-Las cifras del README no son mediciones de esta implementación. No se han
-hecho benchmarks.
+Rendimiento: dos series medidas (commit `e52c468`): la serie final del
+proxy y la comparación directo/proxy, documentadas en
+[`benchmark.md`](benchmark.md) y resumidas en § Rendimiento. Las cifras que
+traía el README original del enunciado no eran mediciones de esta
+implementación.
 
 ## Matriz R01–R15
 
@@ -44,6 +47,43 @@ hecho benchmarks.
 | R13 | Estadísticas JSON por socket UNIX | **Verificado (Linux)** | Maestro sirve JSON (esquema 1) con datos por worker y totales, tipos de contador, ausentes y reinicios. Unitarias: sumas, ausentes, salud mixta, escapado. Integración: totales = suma por worker; permisos 0600; ruta ocupada por un fichero o por un socket ajeno → arranque fallido y recurso intacto; clientes que no leen un JSON de ~440 KB + cliente sobrante rechazado mientras el tráfico sigue; expulsión por plazo; reinicio de worker visible (`restarts`, contadores a 0). Cliente `scripts/proxy-stats.py`. | — |
 | R14 | Ciclo de vida HTTP y conexiones | **Verificado (Linux)** | Cuerpos, límites (431 extremo a extremo; 413/414/431 unitarias), timeouts: 408 de cabecera y **408 de cuerpo incompleto** con liberación verificada, keep-alive inactiva, 504 de respuesta y de connect; desconexiones del cliente (cuerpo, respuesta, RST) y del upstream (truncada, caído, anticipada); keep-alive 1.1/1.0 y pipelining; HEAD/204/304/1xx/101/100-continue; **accept ante EMFILE** sin bucle de CPU, descartando al instante y con recuperación. | Reutilización de conexiones al upstream no soportada (documentado, no es criterio). |
 | R15 | Cierre ordenado | **Verificado (Linux)** | Worker: deja de aceptar, completa la activa, fuerza por plazo o segundo aviso; también con recarga en curso. Cierre del maestro **durante una retirada** (worker detenido con SIGSTOP): sin SIGTERM duplicado, un único SIGKILL (el primer plazo que vence), ninguna reposición, ningún hijo, socket retirado, código 70. Maestro: SIGTERM coordinado, plazo con SIGKILL, código 0 solo si todos salen limpios, sin hijos al terminar, socket de estadísticas borrado solo si es el suyo. Límite de reinicios → maestro sale con 1 sin hijos. Valgrind: 0 bytes y 3 fds en maestro y en **cada worker** (ver registro). | — |
+
+## Rendimiento
+
+Serie final del 2026-09-27 (01:40 UTC), detalle y evidencias en
+[`benchmark.md`](benchmark.md) y
+[`benchmark-evidence/serie-final-20260927T0140Z/`](benchmark-evidence/serie-final-20260927T0140Z/README.md).
+Build release de `e52c468`, proxy con 6 workers, nginx con 2 workers,
+100 conexiones, 4 hilos, respuesta de 16 bytes, loopback en una sola máquina
+WSL2; generador `wrk-monotonic` (wrk 4.1.0-4build3 midiendo con
+`CLOCK_MONOTONIC`).
+
+| Serie final (01:40 UTC): medición de 30 s del proxy | req/s | p50 | p99 | Errores de socket | Estado > 399 |
+|---|---|---|---|---|---|
+| 1 | 81.974,62 | 1,13 ms | 3,14 ms | 0 | 0 |
+| 2 | 80.534,42 | 1,16 ms | 2,47 ms | 0 | 0 |
+| 3 | 83.881,57 | 1,12 ms | 2,40 ms | 0 | 0 |
+| Mediana | 81.974,62 | 1,13 ms | 2,47 ms | 0 | 0 |
+
+Frente a los criterios de medición de `docs/requirements.md`:
+
+| Criterio | Estado |
+|---|---|
+| Medición release con wrk, calentamiento y ejecuciones repetidas | Cumplido: build release, 10 s de calentamiento y 3 × 30 s (con wrk-monotonic, variante documentada) |
+| Registrar entorno, workers, concurrencia, latencias y errores | Cumplido (`benchmark.md` § Entorno, § Resultados) |
+| Objetivo ≥ 50.000 req/s | Alcanzado **en este escenario** (una máquina, loopback, 16 bytes); no se generaliza |
+| Informar el resultado real | Cumplido |
+| Comparación del backend directo con el acceso por el proxy | Cumplido en una serie aparte (02:08 UTC): calentamiento por destino y 3 × 30 s por destino alternando el orden; mediana directo 272.084,64 req/s, proxy 84.696,99 req/s, relación 0,311 (`benchmark.md` § Comparación directo/proxy). No aísla el coste del proxy: máquina compartida y una conexión TCP con nginx por petición frente a 100 keep-alive en directo |
+
+Durante la serie el proxy no generó 4xx ni 5xx, sin fallos del backend ni
+reinicios, y cerró con código 0. El cuerpo solo se comprobó con cuatro
+peticiones puntuales (antes y después), no en cada respuesta.
+
+Los avisos de timeout de las mediciones anteriores con el wrk instalado:
+demostrado para 451 avisos de 8 ejecuciones instrumentadas que son
+retrocesos del reloj de pared (`CLOCK_REALTIME`, cada 30 s) y no respuestas
+lentas; que los 194 de la medición original tengan la misma causa sigue
+siendo una hipótesis (`benchmark.md` § Diagnóstico del reloj).
 
 ## Demostraciones
 
@@ -667,4 +707,8 @@ Etapa 1: `--repeat=50` de `io_event` y 6 mutaciones. Etapa 2: 7 mutaciones
   mata la prueba y los que mata la escalada de retirada): de ellos no hay
   evidencia de memoria.
 - Estado compartido entre workers: no existe (decisión documentada).
-- Ningún benchmark.
+- Rendimiento: dos series (serie final y comparación directo/proxy) en una
+  sola máquina WSL2 por loopback con respuestas de 16 bytes; la relación
+  proxy/directo incluye el reparto de CPU y la ausencia de pool de
+  conexiones al upstream; los 194 avisos originales de wrk solo tienen
+  explicación hipotética (`benchmark.md`).

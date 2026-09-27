@@ -1,0 +1,18 @@
+# destino: directo
+# comando: /home/atsperu/proxy-benchmark-evidence/serie-final-20260927T0140Z/03-serie-final/wrk-monotonic -t4 -c100 -d30s --timeout 2s --latency http://127.0.0.1:18080/bench
+# inicio: 2026-09-27T02:11:21.930131336Z
+Running 30s test @ http://127.0.0.1:18080/bench
+  4 threads and 100 connections
+  Thread Stats   Avg      Stdev     Max   +/- Stdev
+    Latency   381.96us  193.59us   6.24ms   87.11%
+    Req/Sec    67.08k     7.56k   80.13k    76.00%
+  Latency Distribution
+     50%  338.00us
+     75%  415.00us
+     90%  554.00us
+     99%    1.23ms
+  8008295 requests in 30.00s, 1.22GB read
+Requests/sec: 266924.96
+Transfer/sec:     41.75MB
+# código: 0
+# fin: 2026-09-27T02:11:51.938106690Z

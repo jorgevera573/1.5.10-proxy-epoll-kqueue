@@ -1,0 +1,9 @@
+ejecución   req/s      completadas  duración  media    p50     p75     p90     p99     máx      socket_err  non2xx3xx  saltos_reloj_en_ventana
+warmup      86021.56       860276   10.00s  1.17ms       -       -       -       -  27.91ms     ninguno         0  0 []
+run1        81974.62      2459692   30.01s  1.25ms  1.13ms  1.44ms  1.76ms  3.14ms  37.21ms     ninguno         0  1 [-2097]
+run2        80534.42      2416372   30.00s  1.24ms  1.16ms  1.48ms  1.78ms  2.47ms  11.56ms     ninguno         0  1 [-1910]
+run3        83881.57      2516802   30.00s  1.19ms  1.12ms  1.41ms  1.72ms  2.40ms  11.61ms     ninguno         0  1 [-1830]
+proxy inicial: requests=1 proxy_4xx=0 proxy_5xx=0 rejected=0 conns=0 restarts=0 complete=True fallos_backend=[0]
+proxy tras la serie: requests=8253513 proxy_4xx=0 proxy_5xx=0 rejected=0 conns=0 restarts=0 complete=True fallos_backend=[0]
+peticiones contadas por el proxy en la serie: 8253512; completadas según wrk (4 ejecuciones): 8253142; diferencia 370 (la comprobación puntual 'before' por el proxy es la petición 1 del contador inicial; la 'after' ocurre después de leer las estadísticas finales y no está incluida). La diferencia, 370 ≤ 4 × 100, son respuestas que el proxy sirvió a peticiones en vuelo al cierre de cada ejecución y que wrk no registra
+saltos del reloj en toda la ventana de clockmon: [('01:41:08.247', -2097), ('01:41:38.249', -1910), ('01:42:08.251', -1830), ('01:42:38.253', -1640), ('01:43:08.253', -1790), ('01:43:38.254', -2049)]

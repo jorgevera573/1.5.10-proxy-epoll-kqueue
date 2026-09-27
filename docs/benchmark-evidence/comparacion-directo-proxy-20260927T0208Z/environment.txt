@@ -1,0 +1,24 @@
+fecha: 2026-09-27T02:08:58.239525133Z
+Linux JORGEVV 6.18.33.2-microsoft-standard-WSL2 #1 SMP PREEMPT_DYNAMIC Thu Jun 18 21:54:43 UTC 2026 x86_64 GNU/Linux
+CPUs: 18
+commit: e52c46857c288676ed0b2bb6d5c018038e4ee84b
+cambios en src/ desde e52c468: 0 líneas de diff
+ninja -n: ninja: no work to do.
+b3bee876fdc6718c44b58e8bbee8ad50b2b8b29dbab526ff6a9536ee9dc077be  /mnt/c/MASTER-ING-SOFTWARE/semana-06/1.5.10-proxy-epoll-kqueue/build-bench-release/src/proxy
+90a7220ac118c836a701b676522fe2e51025184655c3a83793ce89ff4c557429  /home/atsperu/proxy-benchmark-evidence/serie-final-20260927T0140Z/03-serie-final/wrk-monotonic
+wrk debian/4.1.0-4build3+wrk-monotonic [epoll] Copyright (C) 2012 Will Glozer
+nginx version: nginx/1.28.3 (Ubuntu)
+tsc
+Reference ID    : 50484330 (PHC0)
+Stratum         : 1
+Ref time (UTC)  : Sun Sep 27 02:08:47 2026
+System time     : 0.000020655 seconds fast of NTP time
+Last offset     : -0.000006862 seconds
+RMS offset      : 0.000047538 seconds
+Frequency       : 57.484 ppm slow
+Residual freq   : -0.002 ppm
+Skew            : 1.790 ppm
+Root delay      : 0.000000001 seconds
+Root dispersion : 0.000227497 seconds
+Update interval : 8.0 seconds
+Leap status     : Normal

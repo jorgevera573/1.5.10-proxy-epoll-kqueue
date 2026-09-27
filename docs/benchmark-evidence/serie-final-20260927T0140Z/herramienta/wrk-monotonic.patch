@@ -1,0 +1,19 @@
+--- tree/wrk-4.1.0/src/wrk.c	2020-05-16 02:36:37.000000000 -0500
++++ wrk-monotonic/src/wrk.c	2026-09-26 20:37:59.216302174 -0500
+@@ -447,10 +447,13 @@
+     reconnect_socket(c->thread, c);
+ }
+ 
++/* wrk-monotonic: CLOCK_MONOTONIC en lugar de gettimeofday. Afecta a la
++ * latencia de cada petición, a la duración total y al muestreo de Req/Sec;
++ * los temporizadores de ae.c no cambian. */
+ static uint64_t time_us() {
+-    struct timeval t;
+-    gettimeofday(&t, NULL);
+-    return (t.tv_sec * 1000000) + t.tv_usec;
++    struct timespec t;
++    clock_gettime(CLOCK_MONOTONIC, &t);
++    return ((uint64_t) t.tv_sec * 1000000) + (uint64_t) t.tv_nsec / 1000;
+ }
+ 
+ static char *copy_url_part(char *url, struct http_parser_url *parts, enum http_parser_url_fields field) {

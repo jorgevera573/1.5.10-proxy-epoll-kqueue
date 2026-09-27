@@ -1,0 +1,17 @@
+# comando: wrk-monotonic -t4 -c100 -d65s --timeout 2s --latency http://127.0.0.1:18180/bench (verificación de la herramienta, no forma parte de la serie)
+# inicio: 2026-09-27T01:39:04.784813387Z
+Running 1m test @ http://127.0.0.1:18180/bench
+  4 threads and 100 connections
+  Thread Stats   Avg      Stdev     Max   +/- Stdev
+    Latency   359.46us  225.04us  15.40ms   93.04%
+    Req/Sec    70.72k     8.86k  105.07k    72.04%
+  Latency Distribution
+     50%  325.00us
+     75%  389.00us
+     90%  504.00us
+     99%    1.05ms
+  18291490 requests in 1.08m, 2.79GB read
+Requests/sec: 281230.21
+Transfer/sec:     43.99MB
+# código: 0
+# fin: 2026-09-27T01:40:09.828104066Z

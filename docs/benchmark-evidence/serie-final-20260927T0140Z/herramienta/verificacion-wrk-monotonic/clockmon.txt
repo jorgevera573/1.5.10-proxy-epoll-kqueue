@@ -1,0 +1,4 @@
+2026-09-27T01:39:08.243873Z BACKWARD d_realtime_us=-1191 d_monotonic_us=1111 realtime_minus_monotonic_us=-2303
+2026-09-27T01:39:38.245816Z BACKWARD d_realtime_us=-753 d_monotonic_us=1087 realtime_minus_monotonic_us=-1840
+2026-09-27T01:40:08.245326Z BACKWARD d_realtime_us=-771 d_monotonic_us=1085 realtime_minus_monotonic_us=-1856
+2026-09-27T01:40:11.775037Z SUMMARY seconds=68.0 samples=62502 events=3 backward=3 drift_realtime_minus_monotonic_us=-6000 max_sample_gap_us=11486

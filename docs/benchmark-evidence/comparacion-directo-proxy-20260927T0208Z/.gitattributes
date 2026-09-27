@@ -1,0 +1,4 @@
+# Evidencias copiadas tal cual del archivo permanente: sin conversión de fin
+# de línea (las cabeceras HTTP llevan CRLF) ni comprobaciones de espacios,
+# para que los SHA-256 coincidan con los de ese archivo.
+* -text whitespace=-blank-at-eol,-blank-at-eof,-space-before-tab,-cr-at-eol

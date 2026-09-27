@@ -1,0 +1,17 @@
+2026-09-27T02:08:59.615258932Z nginx pid 513193; proxy pid 513204
+2026-09-27T02:08:59.628590885Z comprobación before directo: estado/bytes 200 16 cuerpo igual al esperado
+2026-09-27T02:08:59.640242358Z comprobación before proxy: estado/bytes 200 16 cuerpo igual al esperado
+2026-09-27T02:09:10.819665314Z warmup-directo (directo): Requests/sec: 321931.16 
+2026-09-27T02:09:21.88889584Z warmup-proxy (proxy): Requests/sec: 88707.28 
+2026-09-27T02:09:51.250091745Z r1-1-directo (directo): Requests/sec: 274032.89 
+2026-09-27T02:10:21.404478806Z r1-2-proxy (proxy): Requests/sec: 84696.99 
+2026-09-27T02:10:51.600691237Z r2-1-proxy (proxy): Requests/sec: 87632.49 
+2026-09-27T02:11:21.781676883Z r2-2-directo (directo): Requests/sec: 272084.64 
+2026-09-27T02:11:51.944150652Z r3-1-directo (directo): Requests/sec: 266924.96 
+2026-09-27T02:12:22.101790459Z r3-2-proxy (proxy): Requests/sec: 83613.99 
+2026-09-27T02:12:22.249234656Z comprobación after directo: estado/bytes 200 16 cuerpo igual al esperado
+2026-09-27T02:12:22.262225732Z comprobación after proxy: estado/bytes 200 16 cuerpo igual al esperado
+2026-09-27T02:13:19.792185495Z clockmon: 9 saltos; 2026-09-27T02:13:19.783867Z SUMMARY seconds=260.0 samples=238573 events=9 backward=9 drift_realtime_minus_monotonic_us=-15907 max_sample_gap_us=10781
+2026-09-27T02:13:19.797569901Z proxy terminó (código 0)
+2026-09-27T02:13:19.807207516Z nginx detenido
+2026-09-27T02:13:19.812847864Z fin de la comparación
